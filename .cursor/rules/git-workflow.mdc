@@ -1,0 +1,17 @@
+---
+description: Git branch, commit, review, and dev integration workflow for RepoLensAI Frontend
+alwaysApply: true
+---
+
+# Git Workflow
+
+- Never develop directly on `main` or `dev`.
+- Start each task from the latest `dev` branch.
+- Use a scoped branch such as `feat/person4-<task>`, `fix/person4-<issue>`, or `chore/person4-<task>`.
+- Keep all Person 4 changes inside `RepoLensAI-Frontend`; do not modify the backend repository.
+- Before committing, run `npm run lint`, `npm run build`, and review `git diff` plus `git status`.
+- Use Conventional Commit messages, for example `feat(frontend): scaffold routes and API contracts`.
+- Push the feature branch with `git push -u origin <branch>`.
+- Open a pull request from the feature branch into `dev` and merge only after review and validation.
+- Do not push a feature branch directly onto `dev` and do not force-push shared branches.
+- Never commit `.env.local`, secrets, credentials, generated `.next` output, or `node_modules`.

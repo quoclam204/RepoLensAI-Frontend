@@ -1,0 +1,2 @@
+import { RoutePlaceholder } from "@/components/route-placeholder";
+export default async function Page({ params }: { params: Promise<{ id: string }> }) { const { id } = await params; return <RoutePlaceholder projectId={id} eyebrow="Repository explorer" title="Database" description="Evidence-backed entities and relationships are scheduled for Thursday." endpoint="GET /api/analyses/{id}/database" />; }

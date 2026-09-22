@@ -1,6 +1,9 @@
-import { RoutePlaceholder } from "@/components/route-placeholder";
+import type { Metadata } from "next";
+import { OverviewDashboard } from "@/features/analysis/overview-dashboard";
 
-export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+export const metadata: Metadata = { title: "Repository overview" };
+
+export default async function OverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <RoutePlaceholder projectId={id} eyebrow="Repository dashboard" title="Overview" description="Repository information, languages, projects, file statistics and analysis status will be implemented on Tuesday." endpoint="GET /api/analyses/{id}/overview" />;
+  return <OverviewDashboard analysisId={id} />;
 }

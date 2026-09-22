@@ -11,8 +11,17 @@ Person 4. It does not import or modify source code from `RepoLensAI-Backend`.
 - Typed API contracts and a single REST client boundary.
 - Mock adapter for parallel frontend development.
 
-Analyze, Overview, graphs, explorers and chat are route placeholders only. Their
-feature logic remains assigned to the following scheduled days.
+## Tuesday implementation
+
+- Public Git URL and ZIP input with client-side validation.
+- JSON and multipart adapters for `POST /api/analyses`.
+- Analysis lifecycle polling through `GET /api/analyses/{id}`.
+- Repository overview through `GET /api/analyses/{id}/overview`.
+- Loading, failed, retry and empty states.
+- Browser-local mock lifecycle when no backend URL is configured.
+
+Architecture, dependency, explorer and chat routes remain placeholders for their
+scheduled implementation days.
 
 ## Local setup
 

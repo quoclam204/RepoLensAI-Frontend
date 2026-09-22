@@ -12,11 +12,19 @@ const analysisPath = (analysisId: string) =>
   `/api/analyses/${encodeURIComponent(analysisId)}`;
 
 export const analysisApi = {
-  create(request: CreateAnalysisRequest) {
+  createFromGitUrl(request: CreateAnalysisRequest) {
     return apiRequest<AnalysisSummary>("/api/analyses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(request),
+    });
+  },
+  createFromZip(file: File) {
+    const body = new FormData();
+    body.append("repositoryZip", file);
+    return apiRequest<AnalysisSummary>("/api/analyses", {
+      method: "POST",
+      body,
     });
   },
   get(analysisId: string) {

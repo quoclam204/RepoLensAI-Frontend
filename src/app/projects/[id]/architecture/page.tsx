@@ -1,2 +1,12 @@
-import { RoutePlaceholder } from "@/components/route-placeholder";
-export default async function Page({ params }: { params: Promise<{ id: string }> }) { const { id } = await params; return <RoutePlaceholder projectId={id} eyebrow="Visualization" title="Architecture" description="The React Flow architecture visualization is scheduled for Wednesday." endpoint="GET /api/analyses/{id}/architecture" />; }
+import { ProjectNavigation } from "@/components/project-navigation";
+import { RepositoryGraph } from "@/features/graphs/repository-graph";
+
+export default async function ArchitecturePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return (
+    <>
+      <div className="page-shell graph-nav"><ProjectNavigation projectId={id} /></div>
+      <RepositoryGraph analysisId={id} kind="architecture" />
+    </>
+  );
+}

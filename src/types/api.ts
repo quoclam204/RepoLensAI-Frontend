@@ -41,23 +41,80 @@ export interface RepositoryOverview {
   projects: Array<{ name: string; type: string; fileCount: number }>;
 }
 
-export interface GraphNode {
+export interface ArchitectureNode {
+  id: string;
+  type: string;
+  name: string;
+  path: string;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface EvidenceSnippet {
+  file: string;
+  startLine: number;
+  endLine: number;
+}
+
+export interface ArchitectureEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: string;
+  confidence: string;
+  evidence?: EvidenceSnippet | null;
+  evidenceId?: string;
+}
+
+export interface ArchitectureResponse {
+  analysisId: string;
+  nodes: ArchitectureNode[];
+  edges: ArchitectureEdge[];
+}
+
+export interface DependencyNode {
+  id: string;
+  name: string;
+  type: string;
+}
+
+export interface DependencyItem {
+  id: string;
+  source: DependencyNode;
+  target: DependencyNode;
+  type: string;
+  evidenceId?: string | null;
+}
+
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface VisualGraphNode extends Record<string, unknown> {
   id: string;
   label: string;
   kind: string;
+  path?: string;
+  metadata?: Record<string, unknown> | null;
 }
 
-export interface GraphEdge {
+export interface VisualGraphEdge {
   id: string;
   source: string;
   target: string;
   relationship: string;
-  evidenceId?: string;
+  confidence?: string;
+  evidence?: EvidenceSnippet | null;
+  evidenceId?: string | null;
 }
 
-export interface GraphResponse {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
+export interface VisualGraph {
+  nodes: VisualGraphNode[];
+  edges: VisualGraphEdge[];
+  totalRelationships: number;
 }
 
 export interface EvidenceReference {

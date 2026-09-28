@@ -20,8 +20,16 @@ Person 4. It does not import or modify source code from `RepoLensAI-Backend`.
 - Loading, failed, retry and empty states.
 - Browser-local mock lifecycle when no backend URL is configured.
 
-Architecture, dependency, explorer and chat routes remain placeholders for their
-scheduled implementation days.
+## Wednesday implementation
+
+- Interactive Architecture and Dependencies graphs with React Flow.
+- Pan, zoom, fit-view controls and a repository minimap.
+- Node selection with path, type and metadata details.
+- Typed adapters for the architecture graph and paginated dependency API contracts.
+- Loading, retry and empty states, plus clearly labelled browser-local demo data.
+
+Explorer and chat routes remain placeholders for their scheduled implementation
+days.
 
 ## Local setup
 

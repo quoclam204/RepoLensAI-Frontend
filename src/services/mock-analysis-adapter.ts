@@ -1,9 +1,9 @@
 import type {
   AnalysisStatus,
   AnalysisSummary,
-  GraphResponse,
   RepositoryOverview,
   RepositorySubmission,
+  VisualGraph,
 } from "@/types/api";
 
 const STORAGE_KEY = "repolens.mock.analyses";
@@ -75,7 +75,23 @@ function toSummary(record: StoredAnalysis): AnalysisSummary {
   };
 }
 
-export const emptyGraph: GraphResponse = { nodes: [], edges: [] };
+const demoGraph: VisualGraph = {
+  nodes: [
+    { id: "api", label: "RepoLens.Api", kind: "Project", path: "src/RepoLens.Api", metadata: { language: "C#", projectType: "Web API" } },
+    { id: "application", label: "RepoLens.Application", kind: "Project", path: "src/RepoLens.Application", metadata: { language: "C#", projectType: "Class Library" } },
+    { id: "domain", label: "RepoLens.Domain", kind: "Project", path: "src/RepoLens.Domain", metadata: { language: "C#", projectType: "Class Library" } },
+    { id: "infrastructure", label: "RepoLens.Infrastructure", kind: "Project", path: "src/RepoLens.Infrastructure", metadata: { language: "C#", projectType: "Class Library" } },
+    { id: "analysis", label: "RepoLens.Analysis", kind: "Project", path: "src/RepoLens.Analysis", metadata: { language: "C#", projectType: "Analyzer" } },
+  ],
+  edges: [
+    { id: "api-application", source: "api", target: "application", relationship: "ProjectReference", confidence: "confirmed" },
+    { id: "api-infrastructure", source: "api", target: "infrastructure", relationship: "ProjectReference", confidence: "confirmed" },
+    { id: "infrastructure-application", source: "infrastructure", target: "application", relationship: "ProjectReference", confidence: "confirmed" },
+    { id: "application-domain", source: "application", target: "domain", relationship: "ProjectReference", confidence: "confirmed" },
+    { id: "analysis-application", source: "analysis", target: "application", relationship: "ProjectReference", confidence: "confirmed" },
+  ],
+  totalRelationships: 5,
+};
 
 export const mockAnalysisAdapter = {
   async create(submission: RepositorySubmission) {
@@ -120,6 +136,12 @@ export const mockAnalysisAdapter = {
       ],
     };
   },
-  async architecture() { return emptyGraph; },
-  async dependencies() { return emptyGraph; },
+  async architecture() {
+    await wait(280);
+    return demoGraph;
+  },
+  async dependencies() {
+    await wait(280);
+    return demoGraph;
+  },
 };

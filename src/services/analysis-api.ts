@@ -1,10 +1,12 @@
 import { apiRequest } from "@/services/api-client";
 import type {
   AnalysisSummary,
+  ArchitectureResponse,
   ChatRequest,
   ChatResponse,
   CreateAnalysisRequest,
-  GraphResponse,
+  DependencyItem,
+  PagedResult,
   RepositoryOverview,
 } from "@/types/api";
 
@@ -34,10 +36,16 @@ export const analysisApi = {
     return apiRequest<RepositoryOverview>(`${analysisPath(analysisId)}/overview`);
   },
   architecture(analysisId: string) {
-    return apiRequest<GraphResponse>(`${analysisPath(analysisId)}/architecture`);
+    return apiRequest<ArchitectureResponse>(`${analysisPath(analysisId)}/architecture`);
   },
-  dependencies(analysisId: string) {
-    return apiRequest<GraphResponse>(`${analysisPath(analysisId)}/dependencies`);
+  dependencies(analysisId: string, page = 1, pageSize = 100) {
+    const query = new URLSearchParams({
+      page: page.toString(),
+      pageSize: pageSize.toString(),
+    });
+    return apiRequest<PagedResult<DependencyItem>>(
+      `${analysisPath(analysisId)}/dependencies?${query}`,
+    );
   },
   endpoints(analysisId: string) {
     return apiRequest<unknown[]>(`${analysisPath(analysisId)}/endpoints`);

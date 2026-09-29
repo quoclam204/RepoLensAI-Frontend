@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "./client";
+﻿import { apiGet, apiPost, apiUpload } from "./client";
 import type {
   AnalysisOverviewResponse,
   AnalysisStatusResponse,
@@ -12,6 +12,16 @@ export function createAnalysisFromGit(
   init?: RequestInit,
 ): Promise<CreateAnalysisResponse> {
   return apiPost<CreateAnalysisResponse>("/analyses", request, init);
+}
+
+/** contracts/api.md Section 6.2: POST /api/analyses/upload */
+export function uploadAnalysisZip(
+  file: File,
+  init?: RequestInit,
+): Promise<CreateAnalysisResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload<CreateAnalysisResponse>("/analyses/upload", formData, init);
 }
 
 /** contracts/api.md Section 7: GET /api/analyses/{id} */

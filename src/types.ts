@@ -333,3 +333,56 @@ export interface ChatMessage {
   createdAt: string;
   evidence?: ChatEvidenceItem[];
 }
+
+// --- Archify Schema (docs/ideas/archify.md & RepoLens.Application.Models.Archify) ---
+
+export interface ArchifyComponent {
+  id: string;
+  name: string;
+  evidenceIds: string[];
+}
+
+export interface ArchifyContainer {
+  id: string;
+  name: string;
+  type: string;
+  technology: string;
+  components: ArchifyComponent[];
+  evidenceIds?: string[] | null;
+}
+
+export interface ArchifyRelationship {
+  sourceId: string;
+  targetId: string;
+  type: string;
+  evidenceIds: string[];
+  confidence?: string | null;
+}
+
+export interface ArchifySystem {
+  name: string;
+  description: string;
+  containers: ArchifyContainer[];
+  relationships: ArchifyRelationship[];
+}
+
+export interface ArchifyDocument {
+  system: ArchifySystem;
+}
+
+export type AnalysisStage =
+  | 'Validation'
+  | 'RepositoryAcquisition'
+  | 'FileScanning'
+  | 'LanguageDetection'
+  | 'ProjectDetection'
+  | 'StaticAnalysis'
+  | 'DependencyAnalysis'
+  | 'ApiAnalysis'
+  | 'DatabaseAnalysis'
+  | 'EvidenceGeneration'
+  | 'Persistence'
+  | 'Chunking'
+  | 'Embedding'
+  | 'Indexing'
+  | 'Completed';

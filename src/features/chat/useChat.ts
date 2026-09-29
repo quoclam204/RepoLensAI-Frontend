@@ -1,29 +1,61 @@
-import { useCallback, useState } from "react";
+﻿import { useCallback, useState } from "react";
 import { postChat } from "../../lib/api/chat";
-import type { ChatResponse } from "../../types";
+import type { ChatConfidence, ChatEvidenceItem, ChatMessage, ChatResponse } from "../../types";
 import type { AsyncState } from "../../lib/async-state";
 import { errorState, idleState, loadingState, successState } from "../../lib/async-state";
 
+export interface ExtendedChatMessage extends ChatMessage {
+  confidence?: ChatConfidence;
+}
+
 /**
- * Minimal container state for the chat feature.
+ * Container state for the chat feature supporting conversation history and evidence.
  * Backend: POST /api/analyses/{id}/chat (contracts/api.md Sections 25-29).
- * No chat UI is implemented here; feature teams build on this hook.
  */
 export function useChat(analysisId: string) {
   const [state, setState] = useState<AsyncState<ChatResponse>>(idleState());
+  const [messages, setMessages] = useState<ExtendedChatMessage[]>([]);
 
   const ask = useCallback(
     async (question: string) => {
-      setState((prev) => loadingState(prev.data));
+      const trimmed = question.trim();
+      if (!trimmed) return;
+
+      const userMsg: ExtendedChatMessage = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: trimmed,
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, userMsg]);
+      setState(loadingState());
+
       try {
-        const data = await postChat(analysisId, { question });
-        setState(successState(data));
+        const response = await postChat(analysisId, { question: trimmed });
+        setState(successState(response));
+
+        const assistantMsg: ExtendedChatMessage = {
+          id: `asst-${Date.now()}`,
+          role: "assistant",
+          content: response.answer,
+          createdAt: new Date().toISOString(),
+          confidence: response.confidence,
+          evidence: response.evidence,
+        };
+        setMessages((prev) => [...prev, assistantMsg]);
       } catch (err) {
-        setState(errorState(err instanceof Error ? err : new Error("Chat request failed.")));
+        const error = err instanceof Error ? err : new Error("Chat request failed.");
+        setState(errorState(error));
       }
     },
     [analysisId],
   );
 
-  return { state, ask };
+  const clearChat = useCallback(() => {
+    setMessages([]);
+    setState(idleState());
+  }, []);
+
+  return { state, messages, ask, clearChat };
 }

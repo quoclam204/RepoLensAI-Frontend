@@ -1,13 +1,25 @@
-import type { CSSProperties, ReactNode } from "react";
+﻿import type { CSSProperties, ReactNode } from "react";
 
-/** Minimal primitive container; not a design system. */
-export function Card({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+export interface CardProps {
+  children: ReactNode;
+  style?: CSSProperties;
+  className?: string;
+  onClick?: () => void;
+}
+
+export function Card({ children, style, className = "", onClick }: CardProps) {
   return (
     <div
+      onClick={onClick}
+      className={className}
       style={{
-        border: "1px solid #e5e5e5",
-        borderRadius: 8,
-        padding: 16,
+        backgroundColor: "var(--bg-card, #131b2e)",
+        border: "1px solid var(--border-color, #27354f)",
+        borderRadius: 12,
+        padding: 20,
+        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
+        transition: onClick ? "border-color 0.2s, background-color 0.2s" : undefined,
+        cursor: onClick ? "pointer" : undefined,
         ...style,
       }}
     >

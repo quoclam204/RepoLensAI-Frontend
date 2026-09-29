@@ -1,12 +1,27 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+"use client";
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Search,
+  Plus,
+  Minus,
+  RotateCcw,
+  Layers,
+  ArrowUpRight,
+  X,
+  FileCode2,
+  GitBranch,
+  Network,
+  Share2,
+} from "lucide-react";
 import { getArchitecture } from "../../lib/api/architecture";
 import type { ArchitectureEdge, ArchitectureNode, ArchitectureResponse } from "../../types";
-import { Card } from "../../components/ui/Card";
-import { Loading } from "../../components/ui/Loading";
 import { ErrorMessage } from "../../components/ui/ErrorMessage";
 
 interface ArchitectureGraphProps {
   analysisId: string;
+  onOpenArchify?: () => void;
+  onOpenEvidenceFile?: (evidence: { file: string; startLine?: number; endLine?: number }) => void;
 }
 
 interface PositionedNode extends ArchitectureNode {
@@ -16,19 +31,26 @@ interface PositionedNode extends ArchitectureNode {
   height: number;
 }
 
-export function ArchitectureGraph({ analysisId }: ArchitectureGraphProps) {
+export function ArchitectureGraph({
+  analysisId,
+  onOpenArchify,
+  onOpenEvidenceFile,
+}: ArchitectureGraphProps) {
   const [data, setData] = useState<ArchitectureResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
 
   // Pan & Zoom state
   const [scale, setScale] = useState(1);
-  const [translate, setTranslate] = useState({ x: 40, y: 40 });
+  const [translate, setTranslate] = useState({ x: 30, y: 30 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
+
+  const [refreshIndex, setRefreshIndex] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -37,22 +59,23 @@ export function ArchitectureGraph({ analysisId }: ArchitectureGraphProps) {
 
     getArchitecture(analysisId)
       .then((res) => {
-        if (isMounted) {
-          setData(res);
-          setLoading(false);
+        if (!isMounted) return;
+        setData(res);
+        setLoading(false);
+        if (res.nodes.length > 0) {
+          setSelectedNodeId((current) => current ?? res.nodes[0].id);
         }
       })
       .catch((err) => {
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : "Failed to load architecture");
-          setLoading(false);
-        }
+        if (!isMounted) return;
+        setError(err instanceof Error ? err.message : "Failed to load architecture");
+        setLoading(false);
       });
 
     return () => {
       isMounted = false;
     };
-  }, [analysisId]);
+  }, [analysisId, refreshIndex]);
 
   // Unique node types
   const nodeTypes = useMemo(() => {
@@ -60,28 +83,37 @@ export function ArchitectureGraph({ analysisId }: ArchitectureGraphProps) {
     return Array.from(new Set(data.nodes.map((n) => n.type)));
   }, [data]);
 
-  // Filtered nodes
+  // Filtered nodes (by type and search)
   const filteredNodes = useMemo(() => {
     if (!data?.nodes) return [];
-    if (typeFilter === "ALL") return data.nodes;
-    return data.nodes.filter((n) => n.type === typeFilter);
-  }, [data, typeFilter]);
+    return data.nodes.filter((n) => {
+      const matchType = typeFilter === "ALL" || n.type === typeFilter;
+      const matchSearch =
+        !search.trim() ||
+        n.name.toLowerCase().includes(search.toLowerCase()) ||
+        n.path.toLowerCase().includes(search.toLowerCase()) ||
+        n.type.toLowerCase().includes(search.toLowerCase());
+      return matchType && matchSearch;
+    });
+  }, [data, typeFilter, search]);
 
   const filteredNodeIds = useMemo(() => new Set(filteredNodes.map((n) => n.id)), [filteredNodes]);
 
   // Filtered edges
   const filteredEdges = useMemo(() => {
     if (!data?.edges) return [];
-    return data.edges.filter((e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target));
+    return data.edges.filter(
+      (e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target)
+    );
   }, [data, filteredNodeIds]);
 
-  // Layout positioning calculation
+  // Position calculation
   const positionedNodes = useMemo<PositionedNode[]>(() => {
     if (filteredNodes.length === 0) return [];
 
     const nodeWidth = 200;
-    const nodeHeight = 70;
-    const colSpacing = 280;
+    const nodeHeight = 68;
+    const colSpacing = 270;
     const rowSpacing = 110;
 
     const cols = Math.max(1, Math.ceil(Math.sqrt(filteredNodes.length * 1.5)));
@@ -91,8 +123,8 @@ export function ArchitectureGraph({ analysisId }: ArchitectureGraphProps) {
       const row = Math.floor(index / cols);
       return {
         ...node,
-        x: 60 + col * colSpacing,
-        y: 60 + row * rowSpacing,
+        x: 50 + col * colSpacing,
+        y: 50 + row * rowSpacing,
         width: nodeWidth,
         height: nodeHeight,
       };
@@ -122,14 +154,14 @@ export function ArchitectureGraph({ analysisId }: ArchitectureGraphProps) {
   }, [selectedNodeId, data]);
 
   // Zoom handlers
-  const handleZoomIn = () => setScale((s) => Math.min(2.5, s + 0.2));
-  const handleZoomOut = () => setScale((s) => Math.max(0.3, s - 0.2));
+  const handleZoomIn = () => setScale((s) => Math.min(2.2, +(s + 0.15).toFixed(2)));
+  const handleZoomOut = () => setScale((s) => Math.max(0.35, +(s - 0.15).toFixed(2)));
   const handleResetZoom = () => {
     setScale(1);
-    setTranslate({ x: 40, y: 40 });
+    setTranslate({ x: 30, y: 30 });
   };
 
-  // Drag pan handlers
+  // Drag handlers
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
     setIsDragging(true);
@@ -146,354 +178,344 @@ export function ArchitectureGraph({ analysisId }: ArchitectureGraphProps) {
 
   const handleMouseUp = () => setIsDragging(false);
 
-  const getNodeColor = (type: string) => {
-    const t = type.toLowerCase();
-    if (t.includes("project")) return { bg: "#1e3a8a", border: "#3b82f6", text: "#bfdbfe" };
-    if (t.includes("service")) return { bg: "#064e3b", border: "#10b981", text: "#a7f3d0" };
-    if (t.includes("controller") || t.includes("api")) return { bg: "#4c1d95", border: "#8b5cf6", text: "#ddd6fe" };
-    if (t.includes("database") || t.includes("entity")) return { bg: "#701a75", border: "#d946ef", text: "#f5d0fe" };
-    return { bg: "#1e293b", border: "#475569", text: "#cbd5e1" };
+  // Focus on node
+  const handleFocusNode = (nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    const node = nodeMap.get(nodeId);
+    if (node) {
+      setTranslate({
+        x: Math.max(20, 240 - node.x * scale),
+        y: Math.max(20, 180 - node.y * scale),
+      });
+    }
   };
 
   if (loading) {
-    return <Loading label="Loading architecture graph..." style={{ padding: "60px 0" }} />;
+    return (
+      <div className="workspace-empty" role="status" style={{ minHeight: 400 }}>
+        <div className="loading-ring" />
+        <strong style={{ color: "var(--foreground)" }}>Rendering architecture topology</strong>
+        <p>Extracting component relationships and boundary maps...</p>
+      </div>
+    );
   }
 
   if (error) {
-    return <ErrorMessage message={error} style={{ margin: "20px 0" }} />;
+    return (
+      <div style={{ padding: 20 }}>
+        <ErrorMessage message={error} onRetry={() => setRefreshIndex((i) => i + 1)} />
+      </div>
+    );
   }
 
   if (!data || data.nodes.length === 0) {
     return (
-      <Card style={{ padding: 40, textAlign: "center" }}>
-        <p style={{ color: "var(--text-secondary)" }}>
-          No architectural nodes detected for this repository.
-        </p>
-      </Card>
+      <div className="workspace-empty" style={{ minHeight: 360 }}>
+        <span className="state-icon">
+          <Layers size={18} />
+        </span>
+        <strong style={{ color: "var(--foreground)" }}>No architectural nodes detected</strong>
+        <p>The analyzer did not detect project or component boundaries in this repository.</p>
+      </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Controls toolbar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: 12,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <label style={{ fontSize: "0.85rem", color: "var(--text-secondary)", fontWeight: 600 }}>
-            Filter by Node Type:
-          </label>
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            style={{
-              padding: "6px 12px",
-              backgroundColor: "var(--bg-secondary)",
-              color: "var(--text-primary)",
-              border: "1px solid var(--border-color)",
-              borderRadius: 6,
-              fontSize: "0.85rem",
-              outline: "none",
-            }}
-          >
-            <option value="ALL">All Types ({data.nodes.length})</option>
-            {nodeTypes.map((type) => (
-              <option key={type} value={type}>
-                {type} ({data.nodes.filter((n) => n.type === type).length})
-              </option>
-            ))}
-          </select>
+    <div className="architecture-layout" style={{ marginTop: 0 }}>
+      {/* Left: Interactive Canvas */}
+      <section className="graph-panel" aria-label="Architecture Graph Canvas">
+        {/* Toolbar */}
+        <div className="graph-toolbar">
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+            <div className="graph-search">
+              <Search size={14} aria-hidden="true" />
+              <input
+                aria-label="Search architecture nodes"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search nodes, paths, types..."
+              />
+            </div>
 
-          <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-            Showing {filteredNodes.length} nodes, {filteredEdges.length} edges
-          </span>
+            <label className="filter-select" style={{ minWidth: 120 }}>
+              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                <option value="ALL">All Types ({data.nodes.length})</option>
+                {nodeTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {t} ({data.nodes.filter((n) => n.type === t).length})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="graph-tools">
+            <button
+              className="graph-tool"
+              onClick={handleZoomIn}
+              title="Zoom In"
+              aria-label="Zoom in"
+            >
+              <Plus size={14} />
+            </button>
+            <span className="zoom-readout">{Math.round(scale * 100)}%</span>
+            <button
+              className="graph-tool"
+              onClick={handleZoomOut}
+              title="Zoom Out"
+              aria-label="Zoom out"
+            >
+              <Minus size={14} />
+            </button>
+            <button
+              className="graph-tool"
+              onClick={handleResetZoom}
+              title="Reset View"
+              aria-label="Reset zoom"
+            >
+              <RotateCcw size={13} />
+            </button>
+
+            {onOpenArchify && (
+              <button
+                className="secondary-button"
+                onClick={onOpenArchify}
+                style={{ height: 29, fontSize: "10px", marginLeft: 4 }}
+                title="Open Archify C4 Diagram"
+              >
+                <Layers size={13} />
+                <span>Archify C4</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button
-            onClick={handleZoomIn}
-            title="Zoom In"
-            style={{
-              padding: "6px 12px",
-              backgroundColor: "var(--bg-secondary)",
-              color: "var(--text-primary)",
-              border: "1px solid var(--border-color)",
-              borderRadius: 6,
-              cursor: "pointer",
-            }}
-          >
-            +
-          </button>
-          <button
-            onClick={handleZoomOut}
-            title="Zoom Out"
-            style={{
-              padding: "6px 12px",
-              backgroundColor: "var(--bg-secondary)",
-              color: "var(--text-primary)",
-              border: "1px solid var(--border-color)",
-              borderRadius: 6,
-              cursor: "pointer",
-            }}
-          >
-            -
-          </button>
-          <button
-            onClick={handleResetZoom}
-            title="Reset View"
-            style={{
-              padding: "6px 12px",
-              backgroundColor: "var(--bg-secondary)",
-              color: "var(--text-secondary)",
-              border: "1px solid var(--border-color)",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontSize: "0.8rem",
-            }}
-          >
-            Reset View
-          </button>
-        </div>
-      </div>
-
-      {/* Main Canvas & Details Split */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: selectedNode ? "1fr 340px" : "1fr",
-          gap: 16,
-          height: 600,
-        }}
-      >
-        {/* SVG Graph View */}
+        {/* Canvas Area */}
         <div
+          className="graph-canvas"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          style={{
-            backgroundColor: "#0d1321",
-            borderRadius: 12,
-            border: "1px solid var(--border-color)",
-            overflow: "hidden",
-            cursor: isDragging ? "grabbing" : "grab",
-            position: "relative",
-            userSelect: "none",
-          }}
+          style={{ cursor: isDragging ? "grabbing" : "grab", userSelect: "none" }}
         >
+          {/* Subtle Grid */}
+          <div className="graph-grid" />
+
+          {/* SVG Connection Lines */}
           <svg
-            width="100%"
-            height="100%"
-            style={{ display: "block" }}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              pointerEvents: "none",
+              overflow: "visible",
+            }}
           >
             <defs>
               <marker
-                id="arrowhead"
-                markerWidth="8"
-                markerHeight="6"
-                refX="7"
-                refY="3"
-                orient="auto"
+                id="arch-arrow"
+                viewBox="0 0 10 10"
+                refX="6"
+                refY="5"
+                markerWidth="5"
+                markerHeight="5"
+                orient="auto-start-reverse"
               >
-                <polygon points="0 0, 8 3, 0 6" fill="#64748b" />
+                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#8b8995" />
               </marker>
               <marker
-                id="arrowhead-active"
-                markerWidth="8"
+                id="arch-arrow-active"
+                viewBox="0 0 10 10"
+                refX="6"
+                refY="5"
+                markerWidth="6"
                 markerHeight="6"
-                refX="7"
-                refY="3"
-                orient="auto"
+                orient="auto-start-reverse"
               >
-                <polygon points="0 0, 8 3, 0 6" fill="#3b82f6" />
+                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#c5b6ff" />
               </marker>
             </defs>
 
             <g transform={`translate(${translate.x}, ${translate.y}) scale(${scale})`}>
-              {/* Render edges */}
               {filteredEdges.map((edge) => {
-                const source = nodeMap.get(edge.source);
-                const target = nodeMap.get(edge.target);
-                if (!source || !target) return null;
+                const src = nodeMap.get(edge.source);
+                const tgt = nodeMap.get(edge.target);
+                if (!src || !tgt) return null;
 
-                const startX = source.x + source.width / 2;
-                const startY = source.y + source.height / 2;
-                const endX = target.x + target.width / 2;
-                const endY = target.y + target.height / 2;
+                const isConnectedToSelected =
+                  edge.source === selectedNodeId || edge.target === selectedNodeId;
 
-                const isConnected =
-                  selectedNodeId === edge.source || selectedNodeId === edge.target;
+                const x1 = src.x + src.width / 2;
+                const y1 = src.y + src.height / 2;
+                const x2 = tgt.x + tgt.width / 2;
+                const y2 = tgt.y + tgt.height / 2;
 
-                return (
-                  <g key={edge.id}>
-                    <line
-                      x1={startX}
-                      y1={startY}
-                      x2={endX}
-                      y2={endY}
-                      stroke={isConnected ? "#3b82f6" : "#334155"}
-                      strokeWidth={isConnected ? 2.5 : 1.5}
-                      strokeDasharray={edge.type.toLowerCase().includes("reference") ? undefined : "4 2"}
-                      markerEnd={isConnected ? "url(#arrowhead-active)" : "url(#arrowhead)"}
-                    />
-                    {/* Edge label */}
-                    <text
-                      x={(startX + endX) / 2}
-                      y={(startY + endY) / 2 - 4}
-                      fill={isConnected ? "#93c5fd" : "#64748b"}
-                      fontSize={10}
-                      textAnchor="middle"
-                      style={{ pointerEvents: "none" }}
-                    >
-                      {edge.type}
-                    </text>
-                  </g>
-                );
-              })}
-
-              {/* Render nodes */}
-              {positionedNodes.map((node) => {
-                const isSelected = selectedNodeId === node.id;
-                const color = getNodeColor(node.type);
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const cx1 = x1 + dx * 0.45;
+                const cy1 = y1;
+                const cx2 = x1 + dx * 0.55;
+                const cy2 = y2;
 
                 return (
-                  <g
-                    key={node.id}
-                    transform={`translate(${node.x}, ${node.y})`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedNodeId(isSelected ? null : node.id);
-                    }}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <rect
-                      width={node.width}
-                      height={node.height}
-                      rx={8}
-                      fill={isSelected ? "#1e293b" : color.bg}
-                      stroke={isSelected ? "#60a5fa" : color.border}
-                      strokeWidth={isSelected ? 2.5 : 1}
-                      filter={isSelected ? "drop-shadow(0 0 8px rgba(59, 130, 246, 0.5))" : undefined}
-                    />
-                    {/* Type badge text */}
-                    <text
-                      x={12}
-                      y={20}
-                      fill={color.text}
-                      fontSize={10}
-                      fontWeight="bold"
-                      style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}
-                    >
-                      {node.type}
-                    </text>
-                    {/* Node name */}
-                    <text
-                      x={12}
-                      y={40}
-                      fill="#f8fafc"
-                      fontSize={13}
-                      fontWeight="600"
-                    >
-                      {node.name.length > 20 ? `${node.name.substring(0, 18)}...` : node.name}
-                    </text>
-                    {/* Node path */}
-                    <text
-                      x={12}
-                      y={56}
-                      fill="#94a3b8"
-                      fontSize={10}
-                    >
-                      {node.path ? (node.path.length > 24 ? `...${node.path.slice(-22)}` : node.path) : ""}
-                    </text>
-                  </g>
+                  <path
+                    key={edge.id}
+                    d={`M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`}
+                    fill="none"
+                    stroke={isConnectedToSelected ? "var(--accent)" : "#3b3945"}
+                    strokeWidth={isConnectedToSelected ? 2 : 1}
+                    strokeDasharray={edge.type.toLowerCase().includes("indirect") ? "4,4" : undefined}
+                    opacity={isConnectedToSelected ? 0.95 : 0.4}
+                    markerEnd={isConnectedToSelected ? "url(#arch-arrow-active)" : "url(#arch-arrow)"}
+                  />
                 );
               })}
             </g>
           </svg>
-        </div>
 
-        {/* Selected Node Details Drawer */}
-        {selectedNode && (
-          <Card
+          {/* Node Cards */}
+          <div
             style={{
-              padding: 20,
-              overflowY: "auto",
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
+              position: "absolute",
+              transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
+              transformOrigin: "0 0",
+              pointerEvents: "none",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <span
+            {positionedNodes.map((node) => {
+              const isSelected = node.id === selectedNodeId;
+
+              return (
+                <div
+                  key={node.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedNodeId(node.id);
+                  }}
+                  className={`architecture-node ${isSelected ? "selected" : ""}`}
                   style={{
-                    fontSize: "0.75rem",
-                    fontWeight: 700,
-                    color: "#93c5fd",
-                    textTransform: "uppercase",
+                    left: node.x,
+                    top: node.y,
+                    width: node.width,
+                    pointerEvents: "auto",
+                    cursor: "pointer",
                   }}
                 >
-                  {selectedNode.type}
-                </span>
-                <h4 style={{ fontSize: "1.1rem", fontWeight: 700, marginTop: 2 }}>{selectedNode.name}</h4>
-              </div>
-              <button
-                onClick={() => setSelectedNodeId(null)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  fontSize: "1.2rem",
-                }}
-              >
-                ?
-              </button>
+                  <span className="node-kind">{node.type}</span>
+                  <strong title={node.name}>{node.name}</strong>
+                  <small title={node.path}>{node.path || "No path"}</small>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Legend */}
+          <div className="graph-legend">
+            <span>
+              <span className="legend-dot" /> Component
+            </span>
+            <span>
+              <span className="legend-dot service" /> Service
+            </span>
+            <span>
+              <span className="legend-dot data" /> Data / Entity
+            </span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="graph-footer">
+          <span>
+            {positionedNodes.length} nodes rendered • Click to inspect • Drag to pan
+          </span>
+          <span>{filteredEdges.length} connections</span>
+        </div>
+      </section>
+
+      {/* Right: Node Details Inspector */}
+      <aside className="node-panel" aria-label="Node Details">
+        <div className="node-panel-header">
+          <div>
+            <div className="eyebrow">Node Inspector</div>
+            <h2>Details</h2>
+          </div>
+          {selectedNode && (
+            <button
+              className="close-state"
+              onClick={() => setSelectedNodeId(null)}
+              title="Clear selection"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {!selectedNode ? (
+          <div className="inspector-empty">
+            <span className="state-icon">
+              <Network size={16} />
+            </span>
+            <strong>No node selected</strong>
+            <p>Click any component on the canvas to inspect its metadata, source file, and dependencies.</p>
+          </div>
+        ) : (
+          <div className="node-details">
+            <div className="selected-node-title">
+              <span className="type-badge">{selectedNode.type}</span>
+              <h3>{selectedNode.name}</h3>
             </div>
 
-            <div>
-              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block" }}>PATH</span>
-              <code style={{ fontSize: "0.8rem", color: "#e2e8f0", wordBreak: "break-all" }}>
-                {selectedNode.path || "N/A"}
-              </code>
+            <div className="detail-row">
+              <span>Path</span>
+              <strong style={{ fontFamily: "monospace", fontSize: "10px" }}>
+                {selectedNode.path || "Not specified"}
+              </strong>
             </div>
+
+            {selectedNode.path && onOpenEvidenceFile && (
+              <div style={{ marginTop: 10 }}>
+                <button
+                  className="secondary-button"
+                  style={{ width: "100%", justifyContent: "center", fontSize: "10px", height: 30 }}
+                  onClick={() =>
+                    onOpenEvidenceFile({
+                      file: selectedNode.path,
+                    })
+                  }
+                >
+                  <FileCode2 size={13} />
+                  <span>Inspect in Files</span>
+                  <ArrowUpRight size={13} />
+                </button>
+              </div>
+            )}
 
             {/* Outgoing relationships */}
-            <div>
-              <h5 style={{ fontSize: "0.85rem", fontWeight: 700, marginBottom: 8, color: "#93c5fd" }}>
-                Depends On ({outgoingEdges.length})
-              </h5>
+            <div className="detail-section">
+              <div className="detail-label">
+                <span>Depends On ({outgoingEdges.length})</span>
+              </div>
               {outgoingEdges.length === 0 ? (
-                <p style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>No outgoing dependencies</p>
+                <p className="detail-muted">No outgoing dependencies.</p>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {outgoingEdges.map((e) => {
-                    const targetNode = data?.nodes.find((n) => n.id === e.target);
+                <div className="relationship-list">
+                  {outgoingEdges.map((edge) => {
+                    const targetNode = data?.nodes.find((n) => n.id === edge.target);
                     return (
                       <div
-                        key={e.id}
-                        style={{
-                          backgroundColor: "var(--bg-secondary)",
-                          padding: "8px 10px",
-                          borderRadius: 6,
-                          fontSize: "0.8rem",
-                        }}
+                        key={edge.id}
+                        className="relationship-item"
+                        style={{ cursor: "pointer" }}
+                        onClick={() => handleFocusNode(edge.target)}
+                        title="Click to focus"
                       >
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ fontWeight: 600 }}>{targetNode?.name || e.target}</span>
-                          <span style={{ color: "#60a5fa" }}>{e.type}</span>
+                        <Share2 size={13} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <strong>{targetNode ? targetNode.name : edge.target}</strong>
+                          <small>Relation: {edge.type}</small>
                         </div>
-                        {e.evidence && (
-                          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 4 }}>
-                            ?? {e.evidence.file}:{e.evidence.startLine}-{e.evidence.endLine}
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -502,44 +524,38 @@ export function ArchitectureGraph({ analysisId }: ArchitectureGraphProps) {
             </div>
 
             {/* Incoming relationships */}
-            <div>
-              <h5 style={{ fontSize: "0.85rem", fontWeight: 700, marginBottom: 8, color: "#34d399" }}>
-                Referenced By ({incomingEdges.length})
-              </h5>
+            <div className="detail-section">
+              <div className="detail-label">
+                <span>Depended By ({incomingEdges.length})</span>
+              </div>
               {incomingEdges.length === 0 ? (
-                <p style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>No incoming references</p>
+                <p className="detail-muted">No components depend on this node.</p>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {incomingEdges.map((e) => {
-                    const srcNode = data?.nodes.find((n) => n.id === e.source);
+                <div className="relationship-list">
+                  {incomingEdges.map((edge) => {
+                    const sourceNode = data?.nodes.find((n) => n.id === edge.source);
                     return (
                       <div
-                        key={e.id}
-                        style={{
-                          backgroundColor: "var(--bg-secondary)",
-                          padding: "8px 10px",
-                          borderRadius: 6,
-                          fontSize: "0.8rem",
-                        }}
+                        key={edge.id}
+                        className="relationship-item"
+                        style={{ cursor: "pointer" }}
+                        onClick={() => handleFocusNode(edge.source)}
+                        title="Click to focus"
                       >
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ fontWeight: 600 }}>{srcNode?.name || e.source}</span>
-                          <span style={{ color: "#34d399" }}>{e.type}</span>
+                        <GitBranch size={13} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <strong>{sourceNode ? sourceNode.name : edge.source}</strong>
+                          <small>Relation: {edge.type}</small>
                         </div>
-                        {e.evidence && (
-                          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 4 }}>
-                            ?? {e.evidence.file}:{e.evidence.startLine}-{e.evidence.endLine}
-                          </div>
-                        )}
                       </div>
                     );
                   })}
                 </div>
               )}
             </div>
-          </Card>
+          </div>
         )}
-      </div>
+      </aside>
     </div>
   );
 }

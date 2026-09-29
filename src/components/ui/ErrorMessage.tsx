@@ -1,4 +1,5 @@
-﻿import type { CSSProperties } from "react";
+import type { CSSProperties } from "react";
+import { AlertCircle } from "lucide-react";
 
 export interface ErrorMessageProps {
   message: string;
@@ -11,22 +12,25 @@ export function ErrorMessage({ message, code, style, onRetry }: ErrorMessageProp
   return (
     <div
       role="alert"
+      className="error-state"
       style={{
-        backgroundColor: "rgba(239, 68, 68, 0.1)",
-        border: "1px solid rgba(239, 68, 68, 0.3)",
-        borderRadius: 8,
-        padding: "12px 16px",
-        color: "#fca5a5",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         gap: 12,
-        fontSize: "0.9rem",
+        padding: "12px 16px",
+        backgroundColor: "rgba(71, 31, 39, 0.35)",
+        border: "1px solid #673d46",
+        borderRadius: 6,
+        color: "#e8c2c2",
+        fontSize: "0.85rem",
         ...style,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: "1.1rem" }}>?</span>
+        <span className="state-icon error-icon" style={{ width: 28, height: 28, marginBottom: 0 }}>
+          <AlertCircle size={15} />
+        </span>
         <div>
           {code && (
             <span
@@ -34,7 +38,7 @@ export function ErrorMessage({ message, code, style, onRetry }: ErrorMessageProp
                 fontFamily: "monospace",
                 fontWeight: 700,
                 fontSize: "0.75rem",
-                color: "#f87171",
+                color: "var(--danger, #ef9a9a)",
                 marginRight: 8,
               }}
             >
@@ -47,15 +51,8 @@ export function ErrorMessage({ message, code, style, onRetry }: ErrorMessageProp
       {onRetry && (
         <button
           onClick={onRetry}
-          style={{
-            background: "rgba(239, 68, 68, 0.2)",
-            color: "#fef2f2",
-            border: "1px solid rgba(239, 68, 68, 0.4)",
-            borderRadius: 6,
-            padding: "4px 10px",
-            fontSize: "0.8rem",
-            cursor: "pointer",
-          }}
+          className="secondary-button"
+          style={{ height: 28, fontSize: "0.78rem" }}
         >
           Retry
         </button>

@@ -1,8 +1,9 @@
-﻿import type { ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes } from "react";
+import { cn } from "../../lib/utils";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "outline" | "danger";
-  size?: "sm" | "md" | "lg";
+  variant?: "primary" | "secondary" | "outline" | "danger" | "ghost";
+  size?: "sm" | "md" | "lg" | "icon";
   loading?: boolean;
 }
 
@@ -11,6 +12,7 @@ export function Button({
   size = "md",
   loading = false,
   disabled,
+  className,
   children,
   style,
   ...rest
@@ -20,52 +22,73 @@ export function Button({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    borderRadius: 8,
+    borderRadius: 6,
     fontWeight: 600,
     cursor: disabled || loading ? "not-allowed" : "pointer",
-    opacity: disabled || loading ? 0.65 : 1,
+    opacity: disabled || loading ? 0.6 : 1,
     transition: "all 0.15s ease",
-    border: "none",
+    border: "1px solid transparent",
     outline: "none",
+    userSelect: "none",
+    whiteSpace: "nowrap",
   };
 
   const sizeStyle: React.CSSProperties =
     size === "sm"
-      ? { padding: "6px 12px", fontSize: "0.8rem" }
+      ? { padding: "5px 10px", fontSize: "0.78rem", height: 28 }
       : size === "lg"
-      ? { padding: "12px 24px", fontSize: "1rem" }
-      : { padding: "8px 16px", fontSize: "0.9rem" };
+      ? { padding: "10px 20px", fontSize: "0.95rem", height: 42 }
+      : size === "icon"
+      ? { padding: 6, width: 32, height: 32 }
+      : { padding: "7px 14px", fontSize: "0.85rem", height: 34 };
 
   let variantStyle: React.CSSProperties = {};
   if (variant === "primary") {
     variantStyle = {
-      backgroundColor: "#2563eb",
-      color: "#ffffff",
+      backgroundColor: "var(--accent, #c5b6ff)",
+      color: "#111015",
+      borderColor: "var(--accent, #c5b6ff)",
+      fontWeight: 700,
       boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
     };
   } else if (variant === "secondary") {
     variantStyle = {
-      backgroundColor: "#1e293b",
-      color: "#e2e8f0",
-      border: "1px solid #334155",
+      backgroundColor: "var(--panel-raised, #17171d)",
+      color: "#d4d0dc",
+      borderColor: "var(--line-bright, #3b3945)",
     };
   } else if (variant === "outline") {
     variantStyle = {
       backgroundColor: "transparent",
-      color: "#93c5fd",
-      border: "1px solid #3b82f6",
+      color: "var(--accent, #c5b6ff)",
+      borderColor: "var(--line-bright, #3b3945)",
+    };
+  } else if (variant === "ghost") {
+    variantStyle = {
+      backgroundColor: "transparent",
+      color: "var(--muted, #8b8995)",
+      borderColor: "transparent",
     };
   } else if (variant === "danger") {
     variantStyle = {
-      backgroundColor: "#dc2626",
-      color: "#ffffff",
+      backgroundColor: "rgba(239, 68, 68, 0.15)",
+      color: "#fca5a5",
+      borderColor: "rgba(239, 68, 68, 0.3)",
     };
   }
+
+  const variantClass =
+    variant === "primary"
+      ? "primary-button"
+      : variant === "secondary"
+      ? "secondary-button"
+      : "";
 
   return (
     <button
       {...rest}
       disabled={disabled || loading}
+      className={cn(variantClass, className)}
       style={{
         ...baseStyle,
         ...sizeStyle,
@@ -73,8 +96,10 @@ export function Button({
         ...style,
       }}
     >
-      {loading && <span className="spinner" style={{ width: 14, height: 14 }} />}
+      {loading && <span className="spinner" style={{ width: 13, height: 13 }} />}
       {children}
     </button>
   );
 }
+
+export default Button;

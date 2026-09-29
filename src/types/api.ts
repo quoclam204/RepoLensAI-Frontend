@@ -93,6 +93,134 @@ export interface PagedResult<T> {
   totalPages: number;
 }
 
+export interface ExplorerQuery {
+  page?: number;
+  pageSize?: number;
+}
+
+export interface EndpointQuery extends ExplorerQuery {
+  method?: string;
+  route?: string;
+  projectId?: string;
+  controller?: string;
+}
+
+export interface ProjectReference {
+  id: string;
+  name: string;
+}
+
+export interface EndpointItem {
+  id: string;
+  method: string;
+  route: string;
+  project: ProjectReference;
+  controller?: string | null;
+  action?: string | null;
+  symbolId?: string | null;
+  evidenceId?: string | null;
+}
+
+export interface DetailEvidenceSnippet extends EvidenceSnippet {
+  reason: string;
+}
+
+export interface EndpointDetail {
+  id: string;
+  method: string;
+  route: string;
+  controller?: string | null;
+  action?: string | null;
+  project: string;
+  source: { file: string; symbol?: string | null };
+  evidence: DetailEvidenceSnippet[];
+}
+
+export interface EntityProperty {
+  name: string;
+  type: string;
+  nullable: boolean;
+}
+
+export interface DatabaseRelationship {
+  id: string;
+  sourceEntityId: string;
+  targetEntityId: string;
+  type: string;
+  confidence: string;
+  evidenceId?: string | null;
+}
+
+export interface DatabaseEntity {
+  id: string;
+  name: string;
+  type: string;
+  sourceSymbolId?: string | null;
+  properties: EntityProperty[];
+}
+
+export interface DatabaseModel {
+  entities: DatabaseEntity[];
+  relationships: DatabaseRelationship[];
+}
+
+export interface DatabaseEntityDetail {
+  id: string;
+  name: string;
+  type: string;
+  source?: { file: string; symbol: string } | null;
+  properties: EntityProperty[];
+  relationships: DatabaseRelationship[];
+  evidence: DetailEvidenceSnippet[];
+}
+
+export interface FileQuery extends ExplorerQuery {
+  path?: string;
+  language?: string;
+  projectId?: string;
+  search?: string;
+}
+
+export interface FileItem {
+  id: string;
+  path: string;
+  language: string;
+  projectId: string;
+  size: number;
+  analysisStatus: string;
+}
+
+export interface FileSymbol {
+  id: string;
+  name: string;
+  fullName: string;
+  type: string;
+  startLine: number;
+  endLine: number;
+}
+
+export interface FileDetail {
+  id: string;
+  path: string;
+  language: string;
+  projectId: string;
+  size: number;
+  symbols: FileSymbol[];
+}
+
+export interface FileContent {
+  fileId: string;
+  path: string;
+  language: string;
+  content: string;
+  lineCount: number;
+}
+
+export interface SymbolDetail extends FileSymbol {
+  file: { id: string; path: string };
+  relationships: Array<{ type: string; targetSymbolId: string }>;
+}
+
 export interface VisualGraphNode extends Record<string, unknown> {
   id: string;
   label: string;

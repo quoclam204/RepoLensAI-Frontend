@@ -1,8 +1,19 @@
 import type {
   AnalysisStatus,
   AnalysisSummary,
+  DatabaseEntityDetail,
+  DatabaseModel,
+  EndpointDetail,
+  EndpointItem,
+  EndpointQuery,
+  FileContent,
+  FileDetail,
+  FileItem,
+  FileQuery,
+  PagedResult,
   RepositoryOverview,
   RepositorySubmission,
+  SymbolDetail,
   VisualGraph,
 } from "@/types/api";
 
@@ -93,6 +104,42 @@ const demoGraph: VisualGraph = {
   totalRelationships: 5,
 };
 
+const demoEndpoints: EndpointItem[] = [
+  { id: "endpoint-analyses", method: "POST", route: "/api/analyses", project: { id: "api", name: "RepoLens.Api" }, controller: "AnalysesController", action: "CreateAnalysis", symbolId: "symbol-create", evidenceId: "evidence-create" },
+  { id: "endpoint-architecture", method: "GET", route: "/api/analyses/{id}/architecture", project: { id: "api", name: "RepoLens.Api" }, controller: "ArchitectureController", action: "GetArchitecture", symbolId: "symbol-architecture", evidenceId: "evidence-architecture" },
+  { id: "endpoint-files", method: "GET", route: "/api/analyses/{id}/files", project: { id: "api", name: "RepoLens.Api" }, controller: "FilesController", action: "GetFiles", symbolId: "symbol-files", evidenceId: "evidence-files" },
+];
+
+const demoDatabase: DatabaseModel = {
+  entities: [
+    { id: "entity-analysis", name: "Analysis", type: "Entity", sourceSymbolId: "symbol-analysis", properties: [{ name: "Id", type: "Guid", nullable: false }, { name: "Status", type: "AnalysisStatus", nullable: false }, { name: "RepositoryUrl", type: "string", nullable: true }] },
+    { id: "entity-project", name: "Project", type: "Entity", sourceSymbolId: "symbol-project", properties: [{ name: "Id", type: "Guid", nullable: false }, { name: "AnalysisId", type: "Guid", nullable: false }, { name: "Name", type: "string", nullable: false }] },
+    { id: "entity-source-file", name: "SourceFile", type: "Entity", sourceSymbolId: "symbol-source-file", properties: [{ name: "Id", type: "Guid", nullable: false }, { name: "ProjectId", type: "Guid", nullable: false }, { name: "Path", type: "string", nullable: false }] },
+  ],
+  relationships: [
+    { id: "rel-analysis-project", sourceEntityId: "entity-analysis", targetEntityId: "entity-project", type: "OneToMany", confidence: "confirmed", evidenceId: "evidence-analysis-project" },
+    { id: "rel-project-file", sourceEntityId: "entity-project", targetEntityId: "entity-source-file", type: "OneToMany", confidence: "confirmed", evidenceId: "evidence-project-file" },
+  ],
+};
+
+const demoFiles: FileItem[] = [
+  { id: "file-analyses", path: "src/RepoLens.Api/Controllers/AnalysesController.cs", language: "C#", projectId: "api", size: 4821, analysisStatus: "Completed" },
+  { id: "file-architecture", path: "src/RepoLens.Api/Controllers/ArchitectureController.cs", language: "C#", projectId: "api", size: 2360, analysisStatus: "Completed" },
+  { id: "file-api-types", path: "src/types/api.ts", language: "TypeScript", projectId: "frontend", size: 6210, analysisStatus: "Completed" },
+];
+
+function paginate<T>(items: T[], page = 1, pageSize = 50): PagedResult<T> {
+  const safePage = Math.max(1, page);
+  const safeSize = Math.max(1, pageSize);
+  return {
+    items: items.slice((safePage - 1) * safeSize, safePage * safeSize),
+    totalCount: items.length,
+    page: safePage,
+    pageSize: safeSize,
+    totalPages: Math.ceil(items.length / safeSize),
+  };
+}
+
 export const mockAnalysisAdapter = {
   async create(submission: RepositorySubmission) {
     await wait(500);
@@ -143,5 +190,75 @@ export const mockAnalysisAdapter = {
   async dependencies() {
     await wait(280);
     return demoGraph;
+  },
+  async endpoints(filters: EndpointQuery = {}) {
+    await wait(260);
+    const method = filters.method?.toLowerCase();
+    const route = filters.route?.toLowerCase();
+    const items = demoEndpoints.filter((endpoint) =>
+      (!method || endpoint.method.toLowerCase() === method) &&
+      (!route || endpoint.route.toLowerCase().includes(route)),
+    );
+    return paginate(items, filters.page, filters.pageSize);
+  },
+  async endpointDetail(endpointId: string): Promise<EndpointDetail> {
+    await wait(180);
+    const endpoint = demoEndpoints.find((item) => item.id === endpointId) ?? demoEndpoints[0];
+    return {
+      id: endpoint.id,
+      method: endpoint.method,
+      route: endpoint.route,
+      controller: endpoint.controller,
+      action: endpoint.action,
+      project: endpoint.project.name,
+      source: { file: `src/RepoLens.Api/Controllers/${endpoint.controller}.cs`, symbol: endpoint.action },
+      evidence: [{ file: `src/RepoLens.Api/Controllers/${endpoint.controller}.cs`, startLine: 20, endLine: 31, reason: "Route and action declaration" }],
+    };
+  },
+  async database() {
+    await wait(260);
+    return demoDatabase;
+  },
+  async databaseEntity(entityId: string): Promise<DatabaseEntityDetail> {
+    await wait(180);
+    const entity = demoDatabase.entities.find((item) => item.id === entityId) ?? demoDatabase.entities[0];
+    return {
+      ...entity,
+      source: { file: `src/RepoLens.Domain/Entities/${entity.name}.cs`, symbol: entity.name },
+      relationships: demoDatabase.relationships.filter((item) => item.sourceEntityId === entity.id || item.targetEntityId === entity.id),
+      evidence: [{ file: `src/RepoLens.Domain/Entities/${entity.name}.cs`, startLine: 6, endLine: 28, reason: "Entity declaration" }],
+    };
+  },
+  async files(filters: FileQuery = {}) {
+    await wait(260);
+    const search = filters.search?.toLowerCase();
+    const language = filters.language?.toLowerCase();
+    const items = demoFiles.filter((file) =>
+      (!search || file.path.toLowerCase().includes(search)) &&
+      (!language || file.language.toLowerCase() === language),
+    );
+    return paginate(items, filters.page, filters.pageSize);
+  },
+  async fileDetail(fileId: string): Promise<FileDetail> {
+    await wait(180);
+    const file = demoFiles.find((item) => item.id === fileId) ?? demoFiles[0];
+    return {
+      ...file,
+      symbols: [{ id: `symbol-${file.id}`, name: file.path.split("/").at(-1)?.replace(/\.[^.]+$/, "") ?? "Module", fullName: file.path, type: "Class", startLine: 8, endLine: 48 }],
+    };
+  },
+  async fileContent(fileId: string): Promise<FileContent> {
+    await wait(180);
+    const file = demoFiles.find((item) => item.id === fileId) ?? demoFiles[0];
+    const content = file.language === "TypeScript"
+      ? "export interface AnalysisSummary {\n  id: string;\n  status: AnalysisStatus;\n}\n"
+      : "namespace RepoLens.Api.Controllers;\n\n[ApiController]\npublic class AnalysisController : ControllerBase\n{\n    // Demo source preview\n}\n";
+    return { fileId: file.id, path: file.path, language: file.language, content, lineCount: content.split("\n").length };
+  },
+  async symbolDetail(symbolId: string): Promise<SymbolDetail> {
+    await wait(160);
+    const file = demoFiles.find((item) => symbolId.includes(item.id)) ?? demoFiles[0];
+    const name = file.path.split("/").at(-1)?.replace(/\.[^.]+$/, "") ?? "Module";
+    return { id: symbolId, name, fullName: file.path, type: "Class", file: { id: file.id, path: file.path }, startLine: 8, endLine: 48, relationships: [] };
   },
 };

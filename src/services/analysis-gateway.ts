@@ -4,6 +4,8 @@ import { mockAnalysisAdapter } from "@/services/mock-analysis-adapter";
 import type {
   ArchitectureResponse,
   DependencyItem,
+  EndpointQuery,
+  FileQuery,
   RepositorySubmission,
   VisualGraph,
 } from "@/types/api";
@@ -45,6 +47,46 @@ export const analysisGateway = {
       [firstPage, ...remainingPages].flatMap((page) => page.items),
       firstPage.totalCount,
     );
+  },
+  endpoints(analysisId: string, filters: EndpointQuery = {}) {
+    return usesMockAnalysis
+      ? mockAnalysisAdapter.endpoints(filters)
+      : analysisApi.endpoints(analysisId, filters);
+  },
+  endpointDetail(analysisId: string, endpointId: string) {
+    return usesMockAnalysis
+      ? mockAnalysisAdapter.endpointDetail(endpointId)
+      : analysisApi.endpointDetail(analysisId, endpointId);
+  },
+  database(analysisId: string) {
+    return usesMockAnalysis
+      ? mockAnalysisAdapter.database()
+      : analysisApi.database(analysisId);
+  },
+  databaseEntity(analysisId: string, entityId: string) {
+    return usesMockAnalysis
+      ? mockAnalysisAdapter.databaseEntity(entityId)
+      : analysisApi.databaseEntity(analysisId, entityId);
+  },
+  files(analysisId: string, filters: FileQuery = {}) {
+    return usesMockAnalysis
+      ? mockAnalysisAdapter.files(filters)
+      : analysisApi.files(analysisId, filters);
+  },
+  fileDetail(analysisId: string, fileId: string) {
+    return usesMockAnalysis
+      ? mockAnalysisAdapter.fileDetail(fileId)
+      : analysisApi.fileDetail(analysisId, fileId);
+  },
+  fileContent(analysisId: string, fileId: string) {
+    return usesMockAnalysis
+      ? mockAnalysisAdapter.fileContent(fileId)
+      : analysisApi.fileContent(analysisId, fileId);
+  },
+  symbolDetail(analysisId: string, symbolId: string) {
+    return usesMockAnalysis
+      ? mockAnalysisAdapter.symbolDetail(symbolId)
+      : analysisApi.symbolDetail(analysisId, symbolId);
   },
 };
 

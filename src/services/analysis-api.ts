@@ -6,8 +6,18 @@ import type {
   ChatResponse,
   CreateAnalysisRequest,
   DependencyItem,
+  DatabaseEntityDetail,
+  DatabaseModel,
+  EndpointDetail,
+  EndpointItem,
+  EndpointQuery,
+  FileContent,
+  FileDetail,
+  FileItem,
+  FileQuery,
   PagedResult,
   RepositoryOverview,
+  SymbolDetail,
 } from "@/types/api";
 
 const analysisPath = (analysisId: string) =>
@@ -47,14 +57,43 @@ export const analysisApi = {
       `${analysisPath(analysisId)}/dependencies?${query}`,
     );
   },
-  endpoints(analysisId: string) {
-    return apiRequest<unknown[]>(`${analysisPath(analysisId)}/endpoints`);
+  endpoints(analysisId: string, filters: EndpointQuery = {}) {
+    return apiRequest<PagedResult<EndpointItem>>(
+      `${analysisPath(analysisId)}/endpoints?${toQuery(filters)}`,
+    );
+  },
+  endpointDetail(analysisId: string, endpointId: string) {
+    return apiRequest<EndpointDetail>(
+      `${analysisPath(analysisId)}/endpoints/${encodeURIComponent(endpointId)}`,
+    );
   },
   database(analysisId: string) {
-    return apiRequest<unknown>(`${analysisPath(analysisId)}/database`);
+    return apiRequest<DatabaseModel>(`${analysisPath(analysisId)}/database`);
   },
-  files(analysisId: string) {
-    return apiRequest<unknown[]>(`${analysisPath(analysisId)}/files`);
+  databaseEntity(analysisId: string, entityId: string) {
+    return apiRequest<DatabaseEntityDetail>(
+      `${analysisPath(analysisId)}/database/entities/${encodeURIComponent(entityId)}`,
+    );
+  },
+  files(analysisId: string, filters: FileQuery = {}) {
+    return apiRequest<PagedResult<FileItem>>(
+      `${analysisPath(analysisId)}/files?${toQuery(filters)}`,
+    );
+  },
+  fileDetail(analysisId: string, fileId: string) {
+    return apiRequest<FileDetail>(
+      `${analysisPath(analysisId)}/files/${encodeURIComponent(fileId)}`,
+    );
+  },
+  fileContent(analysisId: string, fileId: string) {
+    return apiRequest<FileContent>(
+      `${analysisPath(analysisId)}/files/${encodeURIComponent(fileId)}/content`,
+    );
+  },
+  symbolDetail(analysisId: string, symbolId: string) {
+    return apiRequest<SymbolDetail>(
+      `${analysisPath(analysisId)}/symbols/${encodeURIComponent(symbolId)}`,
+    );
   },
   evidence(analysisId: string) {
     return apiRequest<unknown[]>(`${analysisPath(analysisId)}/evidence`);
@@ -67,3 +106,11 @@ export const analysisApi = {
     });
   },
 };
+
+function toQuery(filters: object) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== "") query.set(key, String(value));
+  }
+  return query;
+}

@@ -1,10 +1,11 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { getArchifyArchitecture } from "../../lib/api/architecture";
 import type { ArchifyDocument } from "../../types";
 import { Card } from "../../components/ui/Card";
 import { Loading } from "../../components/ui/Loading";
 import { ErrorMessage } from "../../components/ui/ErrorMessage";
 import { Button } from "../../components/ui/Button";
+import { Layers } from "lucide-react";
 
 interface ArchifyViewProps {
   analysisId: string;
@@ -46,6 +47,22 @@ export function ArchifyView({ analysisId }: ArchifyViewProps) {
   }
 
   if (error) {
+    const is404 = error.includes("404") || error.toLowerCase().includes("not found");
+    if (is404) {
+      return (
+        <div className="workspace-empty" style={{ minHeight: 340, padding: 30 }}>
+          <span className="state-icon">
+            <Layers size={18} />
+          </span>
+          <strong style={{ color: "var(--foreground)" }}>
+            Archify C4 Model Not Available
+          </strong>
+          <p style={{ maxWidth: 440, color: "var(--subtle)" }}>
+            The analysis was indexed, but an Archify C4 specification model was not generated for this repository.
+          </p>
+        </div>
+      );
+    }
     return <ErrorMessage message={error} style={{ margin: "20px 0" }} />;
   }
 

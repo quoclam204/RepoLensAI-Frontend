@@ -102,7 +102,13 @@ export default function AnalysisDetailPage({ params }: AnalysesPageProps) {
 
   const statusData = state.data;
   if (!statusData) {
-    return null;
+    return (
+      <div className="workspace-empty" style={{ minHeight: "80vh" }}>
+        <div className="loading-ring" />
+        <strong style={{ color: "var(--foreground)" }}>Connecting to analysis service</strong>
+        <p>Loading status and repository metadata for {analysisId.slice(0, 8)}...</p>
+      </div>
+    );
   }
 
   const isCompleted = statusData.status === "Completed";

@@ -1,2 +1,7 @@
-import { RoutePlaceholder } from "@/components/route-placeholder";
-export default async function Page({ params }: { params: Promise<{ id: string }> }) { const { id } = await params; return <RoutePlaceholder projectId={id} eyebrow="Repository explorer" title="Files and symbols" description="The repository tree and symbol detail experience are scheduled for Thursday." endpoint="GET /api/analyses/{id}/files" />; }
+import { ProjectNavigation } from "@/components/project-navigation";
+import { FileExplorer } from "@/features/explorer/file-explorer";
+
+export default async function FilesPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <main className="workspace-page"><div className="page-shell"><ProjectNavigation projectId={id} /><FileExplorer analysisId={id} /></div></main>;
+}

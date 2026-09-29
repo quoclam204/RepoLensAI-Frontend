@@ -28,8 +28,15 @@ Person 4. It does not import or modify source code from `RepoLensAI-Backend`.
 - Typed adapters for the architecture graph and paginated dependency API contracts.
 - Loading, retry and empty states, plus clearly labelled browser-local demo data.
 
-Explorer and chat routes remain placeholders for their scheduled implementation
-days.
+## Thursday implementation
+
+- Filterable, paginated API endpoint explorer with source evidence details.
+- Database entity, property and relationship explorer with evidence details.
+- Searchable, paginated file index with source preview and symbol inspection.
+- Typed adapters for endpoint, database, file, content and symbol API contracts.
+- Loading, empty and error states for each explorer.
+
+Chat remains a placeholder for its scheduled Friday implementation.
 
 ## Local setup
 

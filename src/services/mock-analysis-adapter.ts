@@ -1,6 +1,8 @@
 import type {
   AnalysisStatus,
   AnalysisSummary,
+  ChatRequest,
+  ChatResponse,
   DatabaseEntityDetail,
   DatabaseModel,
   EndpointDetail,
@@ -260,5 +262,46 @@ export const mockAnalysisAdapter = {
     const file = demoFiles.find((item) => symbolId.includes(item.id)) ?? demoFiles[0];
     const name = file.path.split("/").at(-1)?.replace(/\.[^.]+$/, "") ?? "Module";
     return { id: symbolId, name, fullName: file.path, type: "Class", file: { id: file.id, path: file.path }, startLine: 8, endLine: 48, relationships: [] };
+  },
+  async chat(request: ChatRequest): Promise<ChatResponse> {
+    await wait(620);
+    const normalized = request.question.toLowerCase();
+
+    if (normalized.includes("architecture") || normalized.includes("kiến trúc")) {
+      return {
+        answer: "The demo repository follows a layered .NET structure: the API project exposes HTTP routes, Application owns contracts and orchestration, Domain contains core entities, and Infrastructure implements persistence and external concerns.",
+        confidence: "High",
+        evidence: [
+          { id: "chat-architecture-api", filePath: "src/RepoLens.Api/Program.cs", startLine: 1, endLine: 42, description: "Application startup and service composition." },
+          { id: "chat-architecture-di", filePath: "src/RepoLens.Infrastructure/DependencyInjection.cs", symbol: "AddInfrastructure", startLine: 8, endLine: 37, description: "Infrastructure registration boundary." },
+        ],
+      };
+    }
+
+    if (normalized.includes("endpoint") || normalized.includes("api")) {
+      return {
+        answer: "The demo analysis includes REST endpoints grouped under analysis-scoped controllers. Each detected endpoint can be traced to its controller action and source location in the API explorer.",
+        confidence: "High",
+        evidence: [
+          { id: "chat-endpoint", filePath: "src/RepoLens.Api/Controllers/AnalysesController.cs", symbol: "AnalysesController", startLine: 9, endLine: 58, description: "Analysis lifecycle endpoints." },
+        ],
+      };
+    }
+
+    if (normalized.includes("database") || normalized.includes("entity") || normalized.includes("dữ liệu")) {
+      return {
+        answer: "The demo persistence model links an Analysis to Projects and each Project to its SourceFiles. Open the Database section to inspect detected properties and relationship confidence.",
+        confidence: "Medium",
+        evidence: [
+          { id: "chat-database", filePath: "src/RepoLens.Infrastructure/Persistence/RepoLensDbContext.cs", symbol: "RepoLensDbContext", startLine: 8, endLine: 46, description: "Entity sets and persistence model entry point." },
+        ],
+      };
+    }
+
+    return {
+      answer: "This is a demo response because no backend URL is configured. I can answer sample questions about architecture, API endpoints, or the database model while preserving the same confidence and evidence contract used by the real API.",
+      confidence: "Unknown",
+      evidence: [],
+    };
   },
 };

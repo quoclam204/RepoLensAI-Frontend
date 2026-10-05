@@ -251,6 +251,7 @@ export interface EvidenceReference {
   symbol?: string;
   startLine?: number;
   endLine?: number;
+  description?: string;
 }
 
 export interface ChatRequest {

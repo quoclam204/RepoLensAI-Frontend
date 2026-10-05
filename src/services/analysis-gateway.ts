@@ -88,6 +88,11 @@ export const analysisGateway = {
       ? mockAnalysisAdapter.symbolDetail(symbolId)
       : analysisApi.symbolDetail(analysisId, symbolId);
   },
+  chat(analysisId: string, question: string) {
+    return usesMockAnalysis
+      ? mockAnalysisAdapter.chat({ question })
+      : analysisApi.chat(analysisId, { question });
+  },
 };
 
 function normalizeArchitecture(response: ArchitectureResponse): VisualGraph {

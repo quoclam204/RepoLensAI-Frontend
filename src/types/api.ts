@@ -263,3 +263,57 @@ export interface ChatResponse {
   confidence: ConfidenceLevel;
   evidence: EvidenceReference[];
 }
+
+export interface ArchifyV3Component {
+  id: string;
+  type: string;
+  label: string;
+  sublabel?: string;
+  tag?: string;
+  icon?: string;
+  category?: string;
+  sources?: string[];
+}
+
+export interface ArchifyV3Boundary {
+  id: string;
+  kind: string;
+  label: string;
+  category?: string;
+  wraps: string[];
+}
+
+export interface ArchifyV3Connection {
+  id: string;
+  from: string;
+  to: string;
+  label?: string;
+  variant?: string;
+  evidenceId?: string;
+  confidence?: string;
+}
+
+export interface ArchifyV3Document {
+  schema_version: number;
+  diagram_type: string;
+  meta: {
+    title: string;
+    subtitle?: string;
+    animation?: string;
+    quality_profile?: string;
+  };
+  components: ArchifyV3Component[];
+  boundaries: ArchifyV3Boundary[];
+  connections: ArchifyV3Connection[];
+}
+
+export interface ArchitectureTraceResponse {
+  analysisId: string;
+  fromNodeId: string;
+  toNodeId: string;
+  found: boolean;
+  pathNodes: ArchitectureNode[];
+  pathEdges: ArchitectureEdge[];
+  evidences: EvidenceSnippet[];
+}
+

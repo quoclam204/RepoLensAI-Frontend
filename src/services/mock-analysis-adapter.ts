@@ -90,20 +90,35 @@ function toSummary(record: StoredAnalysis): AnalysisSummary {
 
 const demoGraph: VisualGraph = {
   nodes: [
-    { id: "api", label: "RepoLens.Api", kind: "Project", path: "src/RepoLens.Api", metadata: { language: "C#", projectType: "Web API" } },
-    { id: "application", label: "RepoLens.Application", kind: "Project", path: "src/RepoLens.Application", metadata: { language: "C#", projectType: "Class Library" } },
-    { id: "domain", label: "RepoLens.Domain", kind: "Project", path: "src/RepoLens.Domain", metadata: { language: "C#", projectType: "Class Library" } },
-    { id: "infrastructure", label: "RepoLens.Infrastructure", kind: "Project", path: "src/RepoLens.Infrastructure", metadata: { language: "C#", projectType: "Class Library" } },
-    { id: "analysis", label: "RepoLens.Analysis", kind: "Project", path: "src/RepoLens.Analysis", metadata: { language: "C#", projectType: "Analyzer" } },
+    // 01 / User Interface
+    { id: "user", label: "User", kind: "User Interface", path: "src/Client", metadata: { projectType: "asks for work", language: "TypeScript" } },
+    { id: "chat", label: "Chat Surface", kind: "User Interface", path: "src/Client/Chat", metadata: { projectType: "thread + files", language: "TypeScript" } },
+    { id: "final-reply", label: "Final Reply", kind: "User Interface", path: "src/Client/Output", metadata: { projectType: "answer + changes", language: "TypeScript" } },
+    // 02 / Agent Runtime
+    { id: "planner", label: "Agent Planner", kind: "Agent Runtime", path: "src/RepoLens.Application/Planner", metadata: { projectType: "plan next step", language: "C#" } },
+    { id: "router", label: "Tool Router", kind: "Agent Runtime", path: "src/RepoLens.Application/Router", metadata: { projectType: "choose capability", language: "C#" } },
+    // EX / Policy & Recovery
+    { id: "approval", label: "Approval Gate", kind: "Policy Gate", path: "src/RepoLens.Application/Security", metadata: { projectType: "scope + consent", language: "C#" } },
+    { id: "blocked", label: "Blocked", kind: "Policy Gate", path: "src/RepoLens.Application/Security", metadata: { projectType: "wait or reject", language: "C#" } },
+    { id: "retry", label: "Retry Path", kind: "Policy Gate", path: "src/RepoLens.Application/Recovery", metadata: { projectType: "revise request", language: "C#" } },
+    { id: "tool-call", label: "Tool Call", kind: "Tool Work", path: "src/RepoLens.Infrastructure/Tools", metadata: { projectType: "shell / browser / MCP", language: "C#" } },
+    { id: "external-api", label: "External API", kind: "External Service", path: "src/RepoLens.Infrastructure/Network", metadata: { projectType: "network service", language: "C#" } },
+    { id: "trace-log", label: "Trace Log", kind: "Trace & Memory", path: "src/RepoLens.Infrastructure/Logs", metadata: { projectType: "events + output", language: "C#" } },
   ],
   edges: [
-    { id: "api-application", source: "api", target: "application", relationship: "ProjectReference", confidence: "confirmed" },
-    { id: "api-infrastructure", source: "api", target: "infrastructure", relationship: "ProjectReference", confidence: "confirmed" },
-    { id: "infrastructure-application", source: "infrastructure", target: "application", relationship: "ProjectReference", confidence: "confirmed" },
-    { id: "application-domain", source: "application", target: "domain", relationship: "ProjectReference", confidence: "confirmed" },
-    { id: "analysis-application", source: "analysis", target: "application", relationship: "ProjectReference", confidence: "confirmed" },
+    { id: "e-user-chat", source: "user", target: "chat", relationship: "asks", confidence: "confirmed" },
+    { id: "e-chat-planner", source: "chat", target: "planner", relationship: "plan", confidence: "confirmed" },
+    { id: "e-planner-router", source: "planner", target: "router", relationship: "dispatch", confidence: "confirmed" },
+    { id: "e-router-approval", source: "router", target: "approval", relationship: "needs approval?", confidence: "confirmed" },
+    { id: "e-approval-blocked", source: "approval", target: "blocked", relationship: "denied", confidence: "confirmed" },
+    { id: "e-blocked-retry", source: "blocked", target: "retry", relationship: "revise", confidence: "confirmed" },
+    { id: "e-approval-tool", source: "approval", target: "tool-call", relationship: "approved", confidence: "confirmed" },
+    { id: "e-tool-api", source: "tool-call", target: "external-api", relationship: "invoke", confidence: "confirmed" },
+    { id: "e-tool-trace", source: "tool-call", target: "trace-log", relationship: "record result", confidence: "confirmed" },
+    { id: "e-trace-planner", source: "trace-log", target: "planner", relationship: "trace + memory", confidence: "confirmed" },
+    { id: "e-router-final", source: "router", target: "final-reply", relationship: "complete", confidence: "confirmed" },
   ],
-  totalRelationships: 5,
+  totalRelationships: 11,
 };
 
 const demoEndpoints: EndpointItem[] = [

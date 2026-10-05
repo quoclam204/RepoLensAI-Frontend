@@ -2,6 +2,8 @@ import { apiRequest } from "@/services/api-client";
 import type {
   AnalysisSummary,
   ArchitectureResponse,
+  ArchifyV3Document,
+  ArchitectureTraceResponse,
   ChatRequest,
   ChatResponse,
   CreateAnalysisRequest,
@@ -135,6 +137,19 @@ export const analysisApi = {
   architecture(analysisId: string) {
     return apiRequest<ArchitectureResponse>(`${analysisPath(analysisId)}/architecture`);
   },
+  archifyV3(analysisId: string) {
+    return apiRequest<ArchifyV3Document>(`${analysisPath(analysisId)}/architecture/v3`);
+  },
+  exportArchifyHtmlUrl(analysisId: string, theme = "dark") {
+    return `/api/analyses/${encodeURIComponent(analysisId)}/architecture/export/html?theme=${encodeURIComponent(theme)}`;
+  },
+  traceRoute(analysisId: string, from: string, to: string) {
+    const query = new URLSearchParams({ from, to });
+    return apiRequest<ArchitectureTraceResponse>(
+      `${analysisPath(analysisId)}/architecture/trace?${query}`,
+    );
+  },
+
   dependencies(analysisId: string, page = 1, pageSize = 100) {
     const query = new URLSearchParams({
       page: page.toString(),

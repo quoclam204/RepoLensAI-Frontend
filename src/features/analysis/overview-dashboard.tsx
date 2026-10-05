@@ -72,6 +72,61 @@ export function OverviewDashboard({ analysisId }: { analysisId: string }) {
           <div className="stage-row">{stages.map((stage) => <span className={stage === analysis.status ? "current" : ""} key={stage}>{stage}</span>)}</div>
         </section>
 
+        {analysis.status === "Completed" && (
+          <div
+            style={{
+              marginTop: "20px",
+              marginBottom: "20px",
+              padding: "18px 24px",
+              background: "linear-gradient(135deg, rgba(11,143,104,0.08) 0%, rgba(16,35,31,0.03) 100%)",
+              border: "1px solid rgba(11,143,104,0.3)",
+              borderRadius: "14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "16px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <span
+                style={{
+                  display: "inline-block",
+                  padding: "3px 9px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  borderRadius: "20px",
+                  background: "#dff6ed",
+                  color: "#0b8f68",
+                  marginBottom: "6px",
+                }}
+              >
+                Diagram Ready
+              </span>
+              <h2 style={{ margin: "2px 0 4px", fontSize: "18px", fontWeight: 700 }}>
+                Interactive Architecture Diagram
+              </h2>
+              <p style={{ margin: 0, fontSize: "13px", color: "var(--muted)" }}>
+                Explore modules, layers, relationships, trace dependencies (Reach), and find execution routes directly on the web.
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <Link
+                className="button primary"
+                href={`/projects/${encodeURIComponent(analysisId)}/architecture`}
+              >
+                Open Architecture Diagram →
+              </Link>
+              <Link
+                className="button secondary"
+                href={`/projects/${encodeURIComponent(analysisId)}/dependencies`}
+              >
+                View Dependencies →
+              </Link>
+            </div>
+          </div>
+        )}
+
         {analysis.status === "Failed" ? (
           <section className="state-panel compact"><h2>Analysis failed</h2><p>{analysis.failureReason ?? "The backend did not provide a failure reason."}</p></section>
         ) : overview ? (

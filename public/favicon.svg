@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#00f0ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <rect width="24" height="24" rx="5" fill="#091728" stroke="none" />
+  <line x1="12" y1="1.5" x2="12" y2="4" stroke-width="2" stroke="#00f0ff" />
+  <line x1="12" y1="20" x2="12" y2="22.5" stroke-width="2" stroke="#00f0ff" />
+  <line x1="1.5" y1="12" x2="4" y2="12" stroke-width="2" stroke="#00f0ff" />
+  <line x1="20" y1="12" x2="22.5" y2="12" stroke-width="2" stroke="#00f0ff" />
+  <circle cx="12" cy="12" r="8.5" stroke="#00f0ff" stroke-width="1.5" opacity="0.85" />
+  <polygon points="12,5.2 17.8,8.5 17.8,15.5 12,18.8 6.2,15.5 6.2,8.5" stroke="#00f0ff" stroke-width="1.6" fill="rgba(0,240,255,0.08)" />
+  <line x1="12" y1="12" x2="12" y2="18.5" stroke="#00f0ff" stroke-width="1.4" opacity="0.9" />
+  <line x1="12" y1="12" x2="17.8" y2="8.5" stroke="#00f0ff" stroke-width="1.4" opacity="0.9" />
+  <line x1="12" y1="12" x2="6.2" y2="8.5" stroke="#00f0ff" stroke-width="1.4" opacity="0.9" />
+  <circle cx="12" cy="12" r="2.2" fill="#00f0ff" stroke="none" />
+</svg>

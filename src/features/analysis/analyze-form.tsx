@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { ChangeEvent, DragEvent, FormEvent, useState } from "react";
 import { analysisGateway, usesMockAnalysis } from "@/services/analysis-gateway";
 import { createZipArchive, shouldIgnorePath, type ZipFileInput } from "@/utils/client-zip";
+import { FolderIcon, ZipArchiveIcon, SpinnerIcon, UploadCloudIcon } from "@/components/icons";
 
 type InputMode = "GitUrl" | "Folder" | "Zip";
 const MAX_ZIP_BYTES = 100 * 1024 * 1024;
@@ -319,7 +320,7 @@ export function AnalyzeForm() {
               onChange={handleFolderInputChange}
             />
             <span className="upload-mark" aria-hidden="true">
-              {packingFolder ? "⏳" : "📁"}
+              {packingFolder ? <SpinnerIcon size={20} /> : <FolderIcon size={20} />}
             </span>
             <strong>
               {packingFolder
@@ -356,7 +357,7 @@ export function AnalyzeForm() {
               onChange={(event) => chooseZip(event.target.files?.[0])}
             />
             <span className="upload-mark" aria-hidden="true">
-              ↑
+              <UploadCloudIcon size={22} />
             </span>
             <strong>{zipFile && !folderInfo ? zipFile.name : "Choose or drop a repository ZIP"}</strong>
             <small>

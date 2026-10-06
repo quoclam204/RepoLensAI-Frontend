@@ -33,6 +33,16 @@ export const analysisGateway = {
       ? mockAnalysisAdapter.overview(analysisId)
       : analysisApi.overview(analysisId);
   },
+  classification(analysisId: string) {
+    return usesMockAnalysis
+      ? mockAnalysisAdapter.classification()
+      : analysisApi.classification(analysisId);
+  },
+  diagram(analysisId: string, diagramType?: string) {
+    return usesMockAnalysis
+      ? mockAnalysisAdapter.diagram(diagramType)
+      : analysisApi.diagram(analysisId, diagramType);
+  },
   async architecture(analysisId: string): Promise<VisualGraph> {
     if (usesMockAnalysis) return mockAnalysisAdapter.architecture();
     return normalizeArchitecture(await analysisApi.architecture(analysisId));

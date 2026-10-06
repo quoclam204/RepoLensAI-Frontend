@@ -207,6 +207,17 @@ export const analysisApi = {
       body: JSON.stringify(request),
     });
   },
+  classification(analysisId: string) {
+    return apiRequest<import("@/types/api").RepositoryClassification>(
+      `${analysisPath(analysisId)}/classification`,
+    );
+  },
+  diagram(analysisId: string, diagramType?: string) {
+    const path = diagramType
+      ? `${analysisPath(analysisId)}/diagrams/${encodeURIComponent(diagramType)}`
+      : `${analysisPath(analysisId)}/diagrams`;
+    return apiRequest<import("@/types/api").DiagramDto>(path);
+  },
 };
 
 function toQuery(filters: object) {

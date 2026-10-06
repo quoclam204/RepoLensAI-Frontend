@@ -317,3 +317,71 @@ export interface ArchitectureTraceResponse {
   evidences: EvidenceSnippet[];
 }
 
+export type RepositoryType =
+  | "ApiBackend"
+  | "Frontend"
+  | "Monorepo"
+  | "Library"
+  | "Cli"
+  | "Unsupported";
+
+export interface ClassificationEvidence {
+  filePath: string;
+  reason: string;
+  layer: number;
+}
+
+export interface RepositoryClassification {
+  type: RepositoryType;
+  detectedLanguages: string[];
+  confidence: ConfidenceLevel;
+  evidences: ClassificationEvidence[];
+  summary: string;
+}
+
+export interface DiagramNodeDto {
+  id: string;
+  label: string;
+  kind: string;
+  role: string;
+  parentId?: string | null;
+  evidence: string[];
+  childDiagramType?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface DiagramEdgeDto {
+  id: string;
+  from: string;
+  to: string;
+  kind: string;
+  label?: string | null;
+  confidence: string;
+  isInferred: boolean;
+}
+
+export interface DiagramDetailCardDto {
+  nodeId: string;
+  title: string;
+  role: string;
+  filePath: string;
+  symbol?: string | null;
+  lineRange?: string | null;
+  description?: string | null;
+  upstreamNodes: string[];
+  downstreamNodes: string[];
+}
+
+export interface DiagramDto {
+  diagramType: string;
+  repositoryType: RepositoryType;
+  status: "Success" | "NotDetected" | "Unsupported";
+  message?: string | null;
+  databaseDetected: boolean;
+  availableDiagramTypes: string[];
+  nodes: DiagramNodeDto[];
+  edges: DiagramEdgeDto[];
+  detailCards: DiagramDetailCardDto[];
+}
+
+

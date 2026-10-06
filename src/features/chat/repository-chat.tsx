@@ -3,6 +3,7 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { analysisGateway, usesMockAnalysis } from "@/services/analysis-gateway";
+import { RepoLensIcon } from "@/components/icons";
 import type { ConfidenceLevel, EvidenceReference } from "@/types/api";
 
 interface ConversationMessage {
@@ -140,7 +141,13 @@ export function RepositoryChat({ analysisId }: { analysisId: string }) {
 function ChatMessage({ message }: { message: ConversationMessage }) {
   return (
     <article className={`message ${message.role === "user" ? "user-message" : "assistant-message"}`}>
-      <div className="message-author"><span>{message.role === "user" ? "You" : "RepoLens AI"}</span>{message.confidence && <ConfidenceBadge confidence={message.confidence} />}</div>
+      <div className="message-author">
+        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+          {message.role === "assistant" && <RepoLensIcon size={14} />}
+          {message.role === "user" ? "You" : "RepoLens AI"}
+        </span>
+        {message.confidence && <ConfidenceBadge confidence={message.confidence} />}
+      </div>
       <p>{message.content}</p>
       {message.evidence && message.evidence.length > 0 && (
         <div className="chat-evidence">

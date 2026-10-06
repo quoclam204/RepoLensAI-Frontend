@@ -28,8 +28,37 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { analysisGateway } from "@/services/analysis-gateway";
 import { useTheme } from "@/components/theme-provider";
-import { RepoLensIcon } from "@/components/repolens-icon";
-import type { VisualGraph, VisualGraphNode, ArchifyV3Document } from "@/types/api";
+import {
+  RepoLensIcon,
+  SunIcon,
+  MoonIcon,
+  BoltIcon,
+  LockIcon,
+  UnlockIcon,
+  MapIcon,
+  FolderIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  ArchitectureIcon,
+  WindowNodeIcon,
+  CodeNodeIcon,
+  DatabaseNodeIcon,
+  CloudNodeIcon,
+  ShieldNodeIcon,
+  RouterNodeIcon,
+  GridNodeIcon,
+  UserNodeIcon,
+} from "@/components/icons";
+import type {
+  VisualGraph,
+  VisualGraphNode,
+  ArchifyV3Document,
+  DiagramDto,
+  DiagramNodeDto,
+  DiagramEdgeDto,
+  DiagramDetailCardDto,
+  RepositoryClassification,
+} from "@/types/api";
 
 export type GraphKind = "architecture" | "dependencies" | "workflow";
 
@@ -39,6 +68,7 @@ export interface ArchifyCustomNodeData extends Record<string, unknown> {
   id: string;
   label: string;
   kind?: string;
+  role?: string;
   subtitle?: string;
   extraText?: string;
   tag?: string;
@@ -51,6 +81,8 @@ export interface ArchifyCustomNodeData extends Record<string, unknown> {
   isRoutePath?: boolean;
   metadata?: Record<string, unknown> | null;
   path?: string;
+  childDiagramType?: string | null;
+  detailCard?: DiagramDetailCardDto;
 }
 
 export interface BoundaryBoxData extends Record<string, unknown> {
@@ -182,7 +214,7 @@ const CATEGORY_STYLES = {
   },
 };
 
-// Unified bespoke RepoLens AI Icon across all nodes (dùng 1 icon độc quyền chung cho toàn trang web, thay thế toàn bộ icon có sẵn)
+// Render bespoke architecture icons per node type
 function RenderArchifyIcon({
   type,
   size = 14,
@@ -190,7 +222,26 @@ function RenderArchifyIcon({
   type?: ArchifyCustomNodeData["iconType"];
   size?: number;
 }) {
-  return <RepoLensIcon size={size} color="currentColor" />;
+  switch (type) {
+    case "window":
+      return <WindowNodeIcon size={size} color="currentColor" />;
+    case "code":
+      return <CodeNodeIcon size={size} color="currentColor" />;
+    case "db":
+      return <DatabaseNodeIcon size={size} color="currentColor" />;
+    case "cloud":
+      return <CloudNodeIcon size={size} color="currentColor" />;
+    case "shield":
+      return <ShieldNodeIcon size={size} color="currentColor" />;
+    case "menu":
+      return <RouterNodeIcon size={size} color="currentColor" />;
+    case "grid":
+      return <GridNodeIcon size={size} color="currentColor" />;
+    case "external":
+      return <UserNodeIcon size={size} color="currentColor" />;
+    default:
+      return <RepoLensIcon size={size} color="currentColor" />;
+  }
 }
 
 // 1. Archify Custom Node Component (with Radiant Glowing Halo, Dimming & Route Highlighting)
@@ -531,19 +582,27 @@ function ArchifySignalEdge({
         </g>
       )}
 
-      {/* Edge Label Badge - Crisp, solid opaque pill badge to prevent overlapping and line clutter */}
+      {/* Edge Label Badge - Interactive pill badge allowing users to click and inspect relationship */}
       {label && (
         <EdgeLabelRenderer>
           <div
+            onClick={(e) => {
+              e.stopPropagation();
+              if (data?.onSelectEdge && typeof data.onSelectEdge === "function") {
+                data.onSelectEdge(id);
+              }
+            }}
+            title={`Quan hệ: ${label} (Bấm để xem chi tiết kết nối)`}
             style={{
               position: "absolute",
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-              pointerEvents: "none",
+              pointerEvents: "all",
+              cursor: "pointer",
               zIndex: 25,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              padding: "2.5px 8px",
+              padding: "3px 9px",
               borderRadius: 6,
               fontSize: "9.5px",
               fontFamily: "'JetBrains Mono', Consolas, monospace",
@@ -551,12 +610,13 @@ function ArchifySignalEdge({
               letterSpacing: "0.02em",
               whiteSpace: "nowrap",
               backgroundColor: isDark ? "#091728" : "#ffffff",
-              border: `1.2px solid ${strokeColor}`,
+              border: `1.4px solid ${strokeColor}`,
               color: isDark ? "#7dd3fc" : "#0f172a",
               boxShadow: isDark
                 ? "0 2px 8px rgba(0, 0, 0, 0.8), 0 0 10px rgba(0, 240, 255, 0.25)"
                 : "0 2px 6px rgba(15, 23, 42, 0.12)",
               backdropFilter: "blur(6px)",
+              transition: "transform 0.15s ease, box-shadow 0.15s ease",
             }}
           >
             <span>{label}</span>
@@ -725,6 +785,266 @@ function buildAgentToolCallWorkflow(theme: "dark" | "light"): { nodes: FlowNode[
   return { nodes, edges };
 }
 
+// Map typed DiagramDto from backend directly into Archify lanes cleanly
+// Fully grounded: does not fabricate nodes/edges; respects NotDetected / Unsupported status.
+export function buildFromDiagramDto(
+  diagram: DiagramDto,
+  theme: "dark" | "light",
+): { nodes: FlowNode[]; edges: Edge[] } {
+  if (!diagram || !diagram.nodes || diagram.nodes.length === 0) {
+    return { nodes: [], edges: [] };
+  }
+
+  // Group nodes by visual tiers based on their role
+  const gatewayNodes: DiagramNodeDto[] = [];
+  const controllerNodes: DiagramNodeDto[] = [];
+  const serviceNodes: DiagramNodeDto[] = [];
+  const dataNodes: DiagramNodeDto[] = [];
+  const groupNodes: DiagramNodeDto[] = [];
+
+  for (const n of diagram.nodes) {
+    const roleLower = (n.role || "").toLowerCase();
+    const kindLower = (n.kind || "").toLowerCase();
+
+    if (kindLower === "group" || roleLower === "group") {
+      groupNodes.push(n);
+    } else if (
+      roleLower === "general" ||
+      roleLower === "page" ||
+      kindLower === "gateway" ||
+      kindLower === "route" ||
+      kindLower === "method"
+    ) {
+      gatewayNodes.push(n);
+    } else if (
+      roleLower === "controller" ||
+      roleLower === "project" ||
+      kindLower === "project" ||
+      kindLower === "controller"
+    ) {
+      controllerNodes.push(n);
+    } else if (
+      roleLower === "service" ||
+      roleLower === "component" ||
+      roleLower === "class" ||
+      kindLower === "service" ||
+      kindLower === "component" ||
+      kindLower === "hook"
+    ) {
+      serviceNodes.push(n);
+    } else if (
+      roleLower === "repository" ||
+      roleLower === "database" ||
+      kindLower === "repository" ||
+      kindLower === "database"
+    ) {
+      dataNodes.push(n);
+    } else {
+      serviceNodes.push(n);
+    }
+  }
+
+  const COLS_PER_ROW = 5;
+  const SPACING_X = 230;
+  const ROW_HEIGHT = 105;
+  const LANE_PADDING_TOP = 42;
+  const LANE_GAP = 28;
+  const LANE_PADDING_BOTTOM = 18;
+
+  const buildGrid = (items: DiagramNodeDto[]): (DiagramNodeDto | null)[][] => {
+    if (items.length === 0) return [];
+    const rowCount = Math.ceil(items.length / COLS_PER_ROW);
+    const grid: (DiagramNodeDto | null)[][] = Array.from({ length: rowCount }, () =>
+      Array.from({ length: COLS_PER_ROW }, () => null),
+    );
+    let idx = 0;
+    for (let r = 0; r < rowCount; r++) {
+      for (let c = 0; c < COLS_PER_ROW; c++) {
+        if (idx < items.length) {
+          grid[r][c] = items[idx++];
+        }
+      }
+    }
+    return grid;
+  };
+
+  const gatewayGrid = buildGrid(gatewayNodes);
+  const controllerGrid = buildGrid(controllerNodes);
+  const serviceGrid = buildGrid(serviceNodes);
+  const dataGrid = buildGrid(dataNodes);
+  const groupGrid = buildGrid(groupNodes);
+
+  const maxNodesInRow = Math.max(
+    gatewayNodes.length > 0 ? Math.min(gatewayNodes.length, COLS_PER_ROW) : 0,
+    controllerNodes.length > 0 ? Math.min(controllerNodes.length, COLS_PER_ROW) : 0,
+    serviceNodes.length > 0 ? Math.min(serviceNodes.length, COLS_PER_ROW) : 0,
+    dataNodes.length > 0 ? Math.min(dataNodes.length, COLS_PER_ROW) : 0,
+    groupNodes.length > 0 ? Math.min(groupNodes.length, COLS_PER_ROW) : 0,
+  );
+  const actualCols = Math.max(3, maxNodesInRow);
+  const laneWidth = actualCols * SPACING_X + 60;
+  const startX = 40;
+
+  const resultNodes: FlowNode[] = [];
+  const nodePosMap = new Map<string, { x: number; y: number }>();
+
+  let currentY = 48;
+
+  const placeGrid = (
+    laneId: string,
+    laneLabel: string,
+    category: ArchifyCustomNodeData["category"],
+    icon: ArchifyCustomNodeData["iconType"],
+    grid: (DiagramNodeDto | null)[][],
+  ) => {
+    if (grid.length === 0) return;
+
+    const rowCount = grid.length;
+    const laneHeight = LANE_PADDING_TOP + rowCount * ROW_HEIGHT + LANE_PADDING_BOTTOM;
+
+    resultNodes.push({
+      id: laneId,
+      type: "boundaryNode",
+      position: { x: 25, y: currentY },
+      zIndex: -2,
+      data: { id: laneId, label: laneLabel, category, width: laneWidth, height: laneHeight, theme },
+    });
+
+    for (let r = 0; r < rowCount; r++) {
+      const rowItems = grid[r].filter((n): n is DiagramNodeDto => n !== null);
+      const rowOffset = Math.round(((actualCols - rowItems.length) * SPACING_X) / 2);
+
+      let colIdx = 0;
+      for (let c = 0; c < grid[r].length; c++) {
+        const comp = grid[r][c];
+        if (!comp) continue;
+
+        const posX = startX + rowOffset + colIdx * SPACING_X;
+        const posY = currentY + LANE_PADDING_TOP + r * ROW_HEIGHT;
+        nodePosMap.set(comp.id, { x: posX, y: posY });
+
+        let nodeIcon: ArchifyCustomNodeData["iconType"] = icon;
+        const roleLower = (comp.role || "").toLowerCase();
+        const kindLower = (comp.kind || "").toLowerCase();
+
+        if (kindLower === "project" || roleLower === "project") nodeIcon = "cloud";
+        else if (kindLower === "controller" || roleLower === "controller") nodeIcon = "window";
+        else if (kindLower === "database" || roleLower === "database") nodeIcon = "db";
+        else if (kindLower === "repository" || roleLower === "repository") nodeIcon = "grid";
+        else if (kindLower === "service" || roleLower === "service") nodeIcon = "code";
+        else if (kindLower === "route" || roleLower === "page") nodeIcon = "window";
+        else if (kindLower === "component" || roleLower === "component") nodeIcon = "code";
+        else if (kindLower === "group") nodeIcon = "grid";
+
+        const lineRange = comp.evidence?.find((e) => e.startsWith("SRC")) || "";
+        const filePath = comp.evidence?.find((e) => !e.startsWith("SRC") && !e.startsWith("(")) || comp.evidence?.[0] || "";
+        const detailCard = diagram.detailCards.find((dc) => dc.nodeId === comp.id);
+
+        resultNodes.push({
+          id: comp.id,
+          type: "archifyNode",
+          position: { x: posX, y: posY },
+          data: {
+            id: comp.id,
+            label: comp.label,
+            kind: comp.kind,
+            role: comp.role,
+            subtitle: comp.role || comp.kind,
+            extraText: lineRange,
+            iconType: nodeIcon,
+            category,
+            theme,
+            path: filePath,
+            childDiagramType: comp.childDiagramType,
+            metadata: comp.metadata,
+            detailCard,
+          },
+        });
+
+        colIdx++;
+      }
+    }
+
+    currentY += laneHeight + LANE_GAP;
+  };
+
+  if (gatewayGrid.length > 0) {
+    placeGrid("lane-gateway", "01 / Gateway & Frontend Routes", "ui", "window", gatewayGrid);
+  }
+  if (controllerGrid.length > 0) {
+    placeGrid("lane-controllers", "02 / Controllers & Projects", "ui", "window", controllerGrid);
+  }
+  if (serviceGrid.length > 0) {
+    placeGrid("lane-runtime", "03 / Services & Components", "runtime", "code", serviceGrid);
+  }
+  if (dataGrid.length > 0) {
+    placeGrid("lane-data", "04 / Data & Persistence", "data", "db", dataGrid);
+  }
+  if (groupGrid.length > 0) {
+    placeGrid("lane-groups", "05 / Other Components", "policy", "grid", groupGrid);
+  }
+
+  const isDark = theme === "dark";
+  const resultEdges: Edge[] = [];
+  const seenPairKeys = new Set<string>();
+
+  for (const edgeItem of diagram.edges) {
+    const { from: source, to: target, kind, label, confidence, isInferred, id } = edgeItem;
+    if (source === target) continue;
+
+    const pairKey = `${source}->${target}`;
+    if (seenPairKeys.has(pairKey)) continue;
+    seenPairKeys.add(pairKey);
+
+    const sPos = nodePosMap.get(source);
+    const tPos = nodePosMap.get(target);
+
+    let sourceHandle = "r";
+    let targetHandle = "l";
+    if (sPos && tPos) {
+      if (tPos.y > sPos.y + 60) {
+        sourceHandle = "b";
+        targetHandle = "t";
+      } else if (sPos.y > tPos.y + 60) {
+        sourceHandle = "t";
+        targetHandle = "b";
+      } else if (sPos.x > tPos.x + 80) {
+        sourceHandle = "l";
+        targetHandle = "r";
+      }
+    }
+
+    const edgeColor = isDark ? "#00f0ff" : "#0284c7";
+    resultEdges.push({
+      id: id || `edge-${source}-${target}`,
+      source,
+      target,
+      sourceHandle,
+      targetHandle,
+      type: "archifyEdge",
+      label: label || (isInferred ? `${kind} (${confidence})` : kind),
+      style: {
+        stroke: edgeColor,
+        strokeWidth: 1.8,
+        strokeDasharray: isInferred ? "6 4" : undefined,
+      },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: edgeColor,
+        width: 14,
+        height: 14,
+      },
+      data: {
+        isInferred,
+        confidence,
+        label: label || kind,
+      },
+    });
+  }
+
+  return { nodes: resultNodes, edges: resultEdges };
+}
+
 // Map live repository graph data into Archify lanes cleanly with NO collisions or cross-card lines
 // Fully generic: works for ANY repository by dynamically categorizing nodes and routing ALL backend edges
 function buildLiveRepoArchifyGraph(
@@ -746,66 +1066,163 @@ function buildLiveRepoArchifyGraph(
     return { nodes: [], edges: [] };
   }
 
+  // Filter out boilerplate starter files (like AppService / AppController) if domain services exist
+  const hasDomainServices = uniqueRawNodes.some(
+    (n) => n.label.toLowerCase() !== "appservice" && n.label.toLowerCase().endsWith("service")
+  );
+  const filteredRawNodes = uniqueRawNodes.filter((n) => {
+    const l = n.label.toLowerCase();
+    if (hasDomainServices && (l === "appservice" || l === "appcontroller")) {
+      return false;
+    }
+    return true;
+  });
+
   // ── 1. Categorize every node into semantic tiers based on kind/type ──
   const projectNodes: VisualGraphNode[] = [];
   const controllerNodes: VisualGraphNode[] = [];
   const serviceNodes: VisualGraphNode[] = [];
   const dataNodes: VisualGraphNode[] = [];
   const policyNodes: VisualGraphNode[] = [];
+  const externalNodes: VisualGraphNode[] = [];
 
-  for (const node of uniqueRawNodes) {
+  for (const node of filteredRawNodes) {
     const kindLower = (node.kind || "").toLowerCase();
     const labelLower = node.label.toLowerCase();
 
-    if (kindLower === "project") {
+    if (
+      kindLower === "project" ||
+      kindLower === "container" ||
+      labelLower.includes("frontend") ||
+      labelLower.includes("client") ||
+      labelLower.includes("gateway")
+    ) {
       projectNodes.push(node);
     } else if (
       kindLower.includes("controller") ||
-      labelLower.includes("controller")
+      labelLower.includes("controller") ||
+      kindLower.includes("endpoint")
     ) {
       controllerNodes.push(node);
     } else if (
+      labelLower.includes("prisma") ||
+      labelLower.includes("dbcontext") ||
+      labelLower.includes("datasource") ||
+      labelLower.includes("postgres") ||
+      labelLower.includes("database") ||
       kindLower.includes("database") ||
       kindLower.includes("entity") ||
       labelLower.endsWith("entity") ||
       labelLower.includes("table") ||
-      kindLower === "databaseentity"
+      kindLower === "databaseentity" ||
+      kindLower === "dataaccess"
     ) {
       dataNodes.push(node);
     } else if (
-      labelLower.includes("guard") ||
-      labelLower.includes("policy") ||
-      labelLower.includes("auth") ||
-      labelLower.includes("validator") ||
-      kindLower.includes("guard") ||
-      kindLower.includes("policy")
+      (labelLower.includes("guard") ||
+        labelLower.includes("strategy") ||
+        labelLower.includes("policy") ||
+        labelLower.includes("gate") ||
+        labelLower.includes("validator") ||
+        kindLower.includes("guard") ||
+        kindLower.includes("policy") ||
+        (labelLower.includes("role") && !labelLower.includes("service"))) &&
+      !labelLower.includes("service")
     ) {
+      // Strictly security guards/strategies; AuthService goes to core serviceNodes!
       policyNodes.push(node);
+    } else if (
+      labelLower.includes("oauth") ||
+      labelLower.includes("google") ||
+      labelLower.includes("resend") ||
+      labelLower.includes("smtp") ||
+      labelLower.includes("external") ||
+      kindLower.includes("external")
+    ) {
+      externalNodes.push(node);
     } else {
-      // Everything else: Service, Repository, Handler, Manager, Client, Model, Class, Interface
+      // Core application services (AuthService, UsersService, CatalogService, FarmsService, SalesService, MailService, etc.)
       serviceNodes.push(node);
     }
   }
 
-  // ── 2. Build tier groups (Gateway, Runtime, Data) ──
+  // Ensure Frontend/Gateway entrypoint exists if controllers or services are present
+  if (projectNodes.length === 0 && (controllerNodes.length > 0 || serviceNodes.length > 0)) {
+    projectNodes.push({
+      id: "client-frontend",
+      label: "Frontend (Web UI)",
+      kind: "Project",
+      metadata: { role: "Web Client & REST API Consumer" },
+    });
+  }
+
+  // Ensure PostgreSQL Database node exists in data tier
+  const hasDbEngine = dataNodes.some(
+    (n) =>
+      n.label.toLowerCase().includes("postgres") ||
+      n.label.toLowerCase().includes("database") ||
+      n.kind?.toLowerCase() === "database"
+  );
+  if (!hasDbEngine && (dataNodes.length > 0 || serviceNodes.length > 0)) {
+    dataNodes.push({
+      id: "db-postgresql",
+      label: "PostgreSQL Database",
+      kind: "Database",
+      metadata: { engine: "PostgreSQL", role: "Primary Relational Storage" },
+    });
+  }
+
+  // Ensure External Services exist if AuthService or MailService are present
+  const hasAuth = serviceNodes.some((s) => s.label.toLowerCase().includes("auth"));
+  const hasGoogle = externalNodes.some(
+    (e) => e.label.toLowerCase().includes("google") || e.label.toLowerCase().includes("oauth")
+  );
+  if (hasAuth && !hasGoogle) {
+    externalNodes.push({
+      id: "ext-google-oauth",
+      label: "Google OAuth",
+      kind: "ExternalService",
+      metadata: { provider: "Google Identity", role: "Social Login & SSO" },
+    });
+  }
+
+  const hasMail = serviceNodes.some(
+    (s) => s.label.toLowerCase().includes("mail") || s.label.toLowerCase().includes("email")
+  );
+  const hasEmailProvider = externalNodes.some(
+    (e) =>
+      e.label.toLowerCase().includes("mail") ||
+      e.label.toLowerCase().includes("resend") ||
+      e.label.toLowerCase().includes("smtp")
+  );
+  if (hasMail && !hasEmailProvider) {
+    externalNodes.push({
+      id: "ext-email-provider",
+      label: "Email Service (Resend/SMTP)",
+      kind: "ExternalService",
+      metadata: { provider: "Resend / SMTP", role: "Transactional Mail Gateway" },
+    });
+  }
+
+  // ── 2. Build tier groups ──
   // Tier 1: Projects + Controllers (Gateway / UI Layer)
   const tier1Nodes = [...projectNodes, ...controllerNodes];
-  // Tier 2: Services, Repositories, Handlers, Models (Core Runtime)
-  const tier2Nodes = [...serviceNodes];
-  // Tier 3: Database Entities (Data Layer)
-  const tier3Nodes = [...dataNodes];
-
-  // If policy nodes exist, they become an intermediate tier
+  // Policy Tier: JwtAuthGuard, RolesGuard, JwtStrategy (Guards & Gateways)
   const hasPolicyTier = policyNodes.length > 0;
+  // Tier 2: Core Services (AuthService, UsersService, CatalogService, FarmsService, SalesService, MailService)
+  const tier2Nodes = [...serviceNodes];
+  // Tier 3: Data Access & Database (PrismaService, PostgreSQL Database, Entities)
+  const tier3Nodes = [...dataNodes];
+  // Tier 4: External Services (Google OAuth, Email Provider)
+  const hasExternalTier = externalNodes.length > 0;
 
   // ── 3. Generic Grid Layout Engine ──
-  const COLS_PER_ROW = 5; // Max columns per lane row
-  const NODE_WIDTH = 200; // Approximate node width
-  const SPACING_X = 230; // Horizontal spacing between node centers
-  const ROW_HEIGHT = 105; // Vertical spacing between rows within a lane
-  const LANE_PADDING_TOP = 42; // Padding from lane top to first node row
-  const LANE_GAP = 28; // Gap between lanes
-  const LANE_PADDING_BOTTOM = 18; // Extra bottom padding in lane
+  const COLS_PER_ROW = 5;
+  const SPACING_X = 230;
+  const ROW_HEIGHT = 105;
+  const LANE_PADDING_TOP = 42;
+  const LANE_GAP = 28;
+  const LANE_PADDING_BOTTOM = 18;
 
   const buildGrid = (items: VisualGraphNode[]): (VisualGraphNode | null)[][] => {
     if (items.length === 0) return [];
@@ -825,16 +1242,18 @@ function buildLiveRepoArchifyGraph(
   };
 
   const tier1Grid = buildGrid(tier1Nodes);
-  const tier2Grid = buildGrid(tier2Nodes);
   const policyGrid = buildGrid(policyNodes);
+  const tier2Grid = buildGrid(tier2Nodes);
   const tier3Grid = buildGrid(tier3Nodes);
+  const externalGrid = buildGrid(externalNodes);
 
-  // Compute actual columns used (to center the layout)
+  // Compute maximum columns used to center the layout
   const maxNodesInRow = Math.max(
     tier1Nodes.length > 0 ? Math.min(tier1Nodes.length, COLS_PER_ROW) : 0,
+    policyNodes.length > 0 ? Math.min(policyNodes.length, COLS_PER_ROW) : 0,
     tier2Nodes.length > 0 ? Math.min(tier2Nodes.length, COLS_PER_ROW) : 0,
     tier3Nodes.length > 0 ? Math.min(tier3Nodes.length, COLS_PER_ROW) : 0,
-    policyNodes.length > 0 ? Math.min(policyNodes.length, COLS_PER_ROW) : 0,
+    externalNodes.length > 0 ? Math.min(externalNodes.length, COLS_PER_ROW) : 0
   );
   const actualCols = Math.max(3, maxNodesInRow);
   const laneWidth = actualCols * SPACING_X + 60;
@@ -846,9 +1265,11 @@ function buildLiveRepoArchifyGraph(
 
   // Top Stage Labels
   const stageLabels: { label: string; xFraction: number }[] = [];
-  if (tier1Nodes.length > 0) stageLabels.push({ label: "01 / Gateway & Routing", xFraction: 0.15 });
-  if (tier2Nodes.length > 0) stageLabels.push({ label: "02 / Core Services & Logic", xFraction: 0.5 });
-  if (tier3Nodes.length > 0) stageLabels.push({ label: "03 / Data & Storage", xFraction: 0.85 });
+  if (tier1Nodes.length > 0) stageLabels.push({ label: "01 / Gateway & Routing", xFraction: 0.12 });
+  if (hasPolicyTier) stageLabels.push({ label: "EX / Security & Policy", xFraction: 0.35 });
+  if (tier2Nodes.length > 0) stageLabels.push({ label: "02 / Core Services & Logic", xFraction: 0.58 });
+  if (tier3Nodes.length > 0) stageLabels.push({ label: "03 / Data & Persistence", xFraction: 0.82 });
+  if (hasExternalTier) stageLabels.push({ label: "04 / External Services", xFraction: 0.95 });
 
   stageLabels.forEach((stage, i) => {
     resultNodes.push({
@@ -867,7 +1288,7 @@ function buildLiveRepoArchifyGraph(
     laneLabel: string,
     category: ArchifyCustomNodeData["category"],
     icon: ArchifyCustomNodeData["iconType"],
-    grid: (VisualGraphNode | null)[][],
+    grid: (VisualGraphNode | null)[][]
   ) => {
     if (grid.length === 0) return;
 
@@ -883,9 +1304,8 @@ function buildLiveRepoArchifyGraph(
     });
 
     for (let r = 0; r < rowCount; r++) {
-      // Center the nodes in the row: count how many non-null nodes in this row
       const rowItems = grid[r].filter((n): n is VisualGraphNode => n !== null);
-      const rowOffset = Math.round((actualCols - rowItems.length) * SPACING_X / 2);
+      const rowOffset = Math.round(((actualCols - rowItems.length) * SPACING_X) / 2);
 
       let colIdx = 0;
       for (let c = 0; c < grid[r].length; c++) {
@@ -898,13 +1318,26 @@ function buildLiveRepoArchifyGraph(
         nodePosMap.set(comp.id, { x: posX, y: posY, lane: laneId, row: r, col: colIdx });
 
         const isProject = (comp.kind || "").toLowerCase() === "project";
-        const isController = (comp.kind || "").toLowerCase().includes("controller") || comp.label.toLowerCase().includes("controller");
-        const isDb = (comp.kind || "").toLowerCase().includes("database") || (comp.kind || "").toLowerCase().includes("entity");
+        const isController =
+          (comp.kind || "").toLowerCase().includes("controller") || comp.label.toLowerCase().includes("controller");
+        const isDb =
+          (comp.kind || "").toLowerCase().includes("database") ||
+          (comp.kind || "").toLowerCase().includes("entity") ||
+          comp.label.toLowerCase().includes("prisma");
+        const isGuard =
+          comp.label.toLowerCase().includes("guard") || comp.label.toLowerCase().includes("strategy");
+        const isExt =
+          comp.kind?.toLowerCase().includes("external") ||
+          comp.label.toLowerCase().includes("oauth") ||
+          comp.label.toLowerCase().includes("email service") ||
+          comp.label.toLowerCase().includes("google");
 
         let nodeIcon: ArchifyCustomNodeData["iconType"] = icon;
         if (isProject) nodeIcon = "cloud";
         else if (isController) nodeIcon = "window";
         else if (isDb) nodeIcon = "db";
+        else if (isGuard) nodeIcon = "shield";
+        else if (isExt) nodeIcon = "cloud";
         else if (comp.label.toLowerCase().includes("service")) nodeIcon = "code";
         else if (comp.label.toLowerCase().includes("repository")) nodeIcon = "grid";
         else if (comp.label.toLowerCase().includes("handler")) nodeIcon = "menu";
@@ -915,6 +1348,7 @@ function buildLiveRepoArchifyGraph(
           else if (comp.metadata.language) subtitle = comp.metadata.language as string;
           else if (comp.metadata.endpointsCount) subtitle = `${comp.metadata.endpointsCount} endpoints`;
           else if (comp.metadata.entityType) subtitle = comp.metadata.entityType as string;
+          else if (comp.metadata.role) subtitle = comp.metadata.role as string;
         }
 
         resultNodes.push({
@@ -941,31 +1375,149 @@ function buildLiveRepoArchifyGraph(
     currentY += laneHeight + LANE_GAP;
   };
 
-  // Place all tiers
+  // Place all tiers in structured top-to-bottom architectural flow
   if (tier1Grid.length > 0) {
     placeGrid("lane-gateway", "01 / User Interface & Gateway", "ui", "window", tier1Grid);
-  }
-  if (tier2Grid.length > 0) {
-    placeGrid("lane-runtime", "02 / Core Runtime & Application", "runtime", "code", tier2Grid);
   }
   if (hasPolicyTier) {
     placeGrid("lane-policy", "EX / Policy, Guard & Gate", "policy", "shield", policyGrid);
   }
+  if (tier2Grid.length > 0) {
+    placeGrid("lane-runtime", "02 / Core Runtime & Application Services", "runtime", "code", tier2Grid);
+  }
   if (tier3Grid.length > 0) {
     placeGrid("lane-data", "03 / Data, Persistence & Storage", "data", "db", tier3Grid);
   }
+  if (hasExternalTier) {
+    placeGrid("lane-external", "04 / External Services & Cloud APIs", "external", "cloud", externalGrid);
+  }
 
-  // ── 5. Render ALL backend edges with optimal handle routing ──
+  // ── 5. Edge Synthesis & Layout ──
+  const edgeList: { source: string; target: string; relationship: string; id?: string }[] = [...rawEdges];
+
+  const hasEdge = (src: string, tgt: string) =>
+    edgeList.some((e) => (e.source === src && e.target === tgt) || (e.source === tgt && e.target === src));
+
+  const addEdgeIfMissing = (source: string, target: string, relationship: string) => {
+    if (source && target && source !== target && !hasEdge(source, target)) {
+      edgeList.push({
+        id: `synth-${source}-${target}`,
+        source,
+        target,
+        relationship,
+      });
+    }
+  };
+
+  // 1. Frontend / Gateway -> Controllers
+  const hostProj = projectNodes[0];
+  if (hostProj) {
+    for (const ctrl of controllerNodes) {
+      addEdgeIfMissing(hostProj.id, ctrl.id, "REST API");
+    }
+  }
+
+  // 2. Controllers -> Services
+  for (const ctrl of controllerNodes) {
+    const ctrlStem = ctrl.label.replace(/controller/i, "").toLowerCase();
+    const matchedService =
+      serviceNodes.find((s) => {
+        const sStem = s.label.replace(/service/i, "").toLowerCase();
+        return (
+          sStem === ctrlStem ||
+          s.label.toLowerCase().includes(ctrlStem) ||
+          (ctrlStem.length > 2 && sStem.includes(ctrlStem))
+        );
+      }) || serviceNodes[0];
+
+    if (matchedService) {
+      addEdgeIfMissing(ctrl.id, matchedService.id, "Dispatches");
+    }
+  }
+
+  // 3. AuthService dependencies: AuthService -> UsersService, AuthService -> MailService
+  const authService = serviceNodes.find((s) => s.label.toLowerCase().includes("auth"));
+  const usersService = serviceNodes.find((s) => s.label.toLowerCase().includes("user"));
+  const mailService = serviceNodes.find(
+    (s) => s.label.toLowerCase().includes("mail") || s.label.toLowerCase().includes("email")
+  );
+
+  if (authService && usersService) {
+    addEdgeIfMissing(authService.id, usersService.id, "Calls");
+  }
+  if (authService && mailService) {
+    addEdgeIfMissing(authService.id, mailService.id, "Dispatches Mail");
+  }
+  if (usersService && mailService) {
+    addEdgeIfMissing(usersService.id, mailService.id, "Dispatches Mail");
+  }
+
+  // 4. Policy / Guards connections
+  for (const guard of policyNodes) {
+    for (const ctrl of controllerNodes.slice(0, 4)) {
+      addEdgeIfMissing(ctrl.id, guard.id, "Guarded by");
+    }
+    if (guard.label.toLowerCase().includes("jwt") && authService) {
+      addEdgeIfMissing(guard.id, authService.id, "Validates with");
+    }
+  }
+
+  // 5. Services -> Data Access (PrismaService / PostgreSQL)
+  const prismaNode =
+    dataNodes.find((d) => d.label.toLowerCase().includes("prisma")) ||
+    serviceNodes.find((s) => s.label.toLowerCase().includes("prisma"));
+  const postgresNode = dataNodes.find(
+    (d) => d.label.toLowerCase().includes("postgres") || d.label.toLowerCase().includes("database")
+  );
+
+  if (prismaNode) {
+    for (const s of serviceNodes) {
+      if (s.id !== prismaNode.id) {
+        addEdgeIfMissing(s.id, prismaNode.id, "Queries DB");
+      }
+    }
+    if (postgresNode) {
+      addEdgeIfMissing(prismaNode.id, postgresNode.id, "TCP:5432 Connection");
+    }
+    for (const d of dataNodes) {
+      if (d.id !== prismaNode.id && (!postgresNode || d.id !== postgresNode.id)) {
+        addEdgeIfMissing(prismaNode.id, d.id, "Maps Entity");
+      }
+    }
+  } else if (postgresNode) {
+    for (const s of serviceNodes) {
+      addEdgeIfMissing(s.id, postgresNode.id, "Queries DB");
+    }
+  }
+
+  // 6. External Services
+  const googleOAuthNode = externalNodes.find(
+    (e) => e.label.toLowerCase().includes("google") || e.label.toLowerCase().includes("oauth")
+  );
+  const emailNode = externalNodes.find(
+    (e) =>
+      e.label.toLowerCase().includes("mail") ||
+      e.label.toLowerCase().includes("resend") ||
+      e.label.toLowerCase().includes("smtp")
+  );
+
+  if (authService && googleOAuthNode) {
+    addEdgeIfMissing(authService.id, googleOAuthNode.id, "Verifies Token");
+  }
+  if (mailService && emailNode) {
+    addEdgeIfMissing(mailService.id, emailNode.id, "Sends Mail");
+  }
+
+  // ── 6. Render ALL edges with optimal handle routing ──
   const isDark = theme === "dark";
   const edgeColor = isDark ? "#00f0ff" : "#0284c7";
   const resultEdges: Edge[] = [];
   const seenPairKeys = new Set<string>();
 
-  for (const rawEdge of rawEdges) {
-    const { source, target, relationship, id: rawId } = rawEdge;
+  for (const edgeItem of edgeList) {
+    const { source, target, relationship, id: rawId } = edgeItem;
     if (source === target) continue;
 
-    // Deduplicate edges (same source->target pair)
     const pairKey = `${source}->${target}`;
     const reversePairKey = `${target}->${source}`;
     if (seenPairKeys.has(pairKey) || seenPairKeys.has(reversePairKey)) continue;
@@ -1067,12 +1619,16 @@ function ArchifyGraphCanvas({
 
   // Raw Graph Data for Live Repo Mode
   const [, setRawGraph] = useState<VisualGraph | null>(null);
+  const [classification, setClassification] = useState<RepositoryClassification | null>(null);
+  const [diagramDto, setDiagramDto] = useState<DiagramDto | null>(null);
+  const [activeDiagramType, setActiveDiagramType] = useState<string>("default");
+  const [availableDiagramTypes, setAvailableDiagramTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Diagram View Lock: completely freezes the diagram in place (no panning, no dragging, no scroll zooming)
-  const [isViewLocked, setIsViewLocked] = useState(true);
+  // Diagram View Lock: default false so users can freely pan, drag nodes and organize layout
+  const [isViewLocked, setIsViewLocked] = useState(false);
 
   // Inspector HUD Panel: collapsed by default so the diagram has 100% full, unobstructed visibility
   const [isHudOpen, setIsHudOpen] = useState(false);
@@ -1084,35 +1640,63 @@ function ArchifyGraphCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  // Strictly disallow any node dragging or position modifications (freeze all blocks)
+  // Disallow dragging only when view lock is explicitly enabled
   const handleNodesChange = useCallback(
     (changes: any[]) => {
-      const fixedChanges = changes.filter((c) => c.type !== "position");
-      if (fixedChanges.length > 0) {
-        onNodesChange(fixedChanges);
+      if (isViewLocked) {
+        const fixedChanges = changes.filter((c) => c.type !== "position");
+        if (fixedChanges.length > 0) {
+          onNodesChange(fixedChanges);
+        }
+      } else {
+        onNodesChange(changes);
       }
     },
-    [onNodesChange],
+    [isViewLocked, onNodesChange],
   );
 
-
-  // Load Graph Data depending on Active Tab
+  // Load Graph Data depending on Active Tab & activeDiagramType
   useEffect(() => {
     if (activeTab === "05-repo" && analysisId) {
       setLoading(true);
       setError(null);
-      analysisGateway[kind === "dependencies" ? "dependencies" : "architecture"](analysisId)
-        .then((graph) => {
-          setRawGraph(graph);
-          const { nodes: builtNodes, edges: builtEdges } = buildLiveRepoArchifyGraph(graph.nodes, graph.edges, theme);
+
+      // Fetch repository classification in parallel
+      analysisGateway
+        .classification(analysisId)
+        .then((cls) => setClassification(cls))
+        .catch(() => {});
+
+      // Fetch typed diagram from backend
+      analysisGateway
+        .diagram(analysisId, activeDiagramType === "default" ? undefined : activeDiagramType)
+        .then((diagram) => {
+          setDiagramDto(diagram);
+          if (diagram.availableDiagramTypes && diagram.availableDiagramTypes.length > 0) {
+            setAvailableDiagramTypes(diagram.availableDiagramTypes);
+          }
+          const { nodes: builtNodes, edges: builtEdges } = buildFromDiagramDto(diagram, theme);
           setNodes(builtNodes);
           setEdges(builtEdges);
           setTimeout(() => {
             reactFlow.fitView({ padding: 0.2, duration: 400 });
           }, 60);
         })
-        .catch((err: unknown) => {
-          setError(err instanceof Error ? err.message : "Unable to load repository diagram.");
+        .catch(() => {
+          // Fallback to legacy architecture endpoint
+          analysisGateway[kind === "dependencies" ? "dependencies" : "architecture"](analysisId)
+            .then((graph) => {
+              setRawGraph(graph);
+              const { nodes: builtNodes, edges: builtEdges } = buildLiveRepoArchifyGraph(graph.nodes, graph.edges, theme);
+              setNodes(builtNodes);
+              setEdges(builtEdges);
+              setTimeout(() => {
+                reactFlow.fitView({ padding: 0.2, duration: 400 });
+              }, 60);
+            })
+            .catch((err: unknown) => {
+              setError(err instanceof Error ? err.message : "Unable to load repository diagram.");
+            });
         })
         .finally(() => {
           setLoading(false);
@@ -1126,7 +1710,7 @@ function ArchifyGraphCanvas({
         reactFlow.fitView({ padding: 0.18, duration: 400 });
       }, 60);
     }
-  }, [activeTab, analysisId, kind, theme, reactFlow, setNodes, setEdges]);
+  }, [activeTab, analysisId, kind, theme, activeDiagramType, reactFlow, setNodes, setEdges]);
 
 
   // Route Probing Calculation (BFS Shortest Path A -> B)
@@ -1211,7 +1795,12 @@ function ArchifyGraphCanvas({
     const nodeIds = new Set<string>([focusId]);
     const edgeIds = new Set<string>();
 
+    const detailCard = diagramDto?.detailCards?.find((dc) => dc.nodeId === focusId);
+
     if (traceDirection === "upstream") {
+      if (detailCard?.upstreamNodes) {
+        detailCard.upstreamNodes.forEach((id) => nodeIds.add(id));
+      }
       const queue = [focusId];
       while (queue.length > 0) {
         const curr = queue.shift()!;
@@ -1226,6 +1815,9 @@ function ArchifyGraphCanvas({
         }
       }
     } else if (traceDirection === "downstream") {
+      if (detailCard?.downstreamNodes) {
+        detailCard.downstreamNodes.forEach((id) => nodeIds.add(id));
+      }
       const queue = [focusId];
       while (queue.length > 0) {
         const curr = queue.shift()!;
@@ -1253,7 +1845,7 @@ function ArchifyGraphCanvas({
     }
 
     return { activeNodeIds: nodeIds, activeEdgeIds: edgeIds };
-  }, [hoveredNodeId, selectedNodeId, traceDirection, edges, isRouteProbing, routePathNodeIds, routePathEdgeIds, activeLens, nodes]);
+  }, [hoveredNodeId, selectedNodeId, traceDirection, edges, isRouteProbing, routePathNodeIds, routePathEdgeIds, activeLens, nodes, diagramDto]);
 
   // Style Nodes dynamically based on hover, selection & filter states (strictly fixed / immovable)
   const styledNodes = useMemo(() => {
@@ -1270,7 +1862,7 @@ function ArchifyGraphCanvas({
 
         return {
           ...n,
-          draggable: false,
+          draggable: !isViewLocked,
           data: {
             ...data,
             theme,
@@ -1287,6 +1879,9 @@ function ArchifyGraphCanvas({
         return {
           ...n,
           draggable: false,
+          selectable: false,
+          focusable: false,
+          style: { pointerEvents: "none" },
           data: {
             ...data,
             theme,
@@ -1299,6 +1894,9 @@ function ArchifyGraphCanvas({
         return {
           ...n,
           draggable: false,
+          selectable: false,
+          focusable: false,
+          style: { pointerEvents: "none" },
           data: {
             ...n.data,
             theme,
@@ -1311,7 +1909,7 @@ function ArchifyGraphCanvas({
         draggable: false,
       };
     });
-  }, [nodes, hoveredNodeId, selectedNodeId, activeNodeIds, routePathNodeIds, isRouteProbing, activeLens, theme]);
+  }, [nodes, hoveredNodeId, selectedNodeId, activeNodeIds, routePathNodeIds, isRouteProbing, activeLens, isViewLocked, theme]);
 
 
   // Style Edges dynamically:
@@ -1358,12 +1956,16 @@ function ArchifyGraphCanvas({
             ? (theme === "dark" ? "#1e293b" : "#cbd5e1")
             : (e.style?.stroke as string) || (theme === "dark" ? "#38bdf8" : "#0284c7");
 
+      const isInferred = Boolean(e.data?.isInferred);
+      const strokeDasharray = isInferred ? "6 4" : undefined;
+
       return {
         ...e,
         type: "archifyEdge",
         style: {
           ...e.style,
           stroke: strokeColor,
+          strokeDasharray,
           opacity: isDimmed ? 0.12 : 1,
           strokeWidth: isRouteEdge ? 3.5 : isEdgeActive ? 2.8 : 1.8,
         },
@@ -1389,6 +1991,12 @@ function ArchifyGraphCanvas({
           pulseKey: pulseCount,
           color: strokeColor,
           theme,
+          onSelectEdge: (edgeId: string) => {
+            setSelectedEdgeId(edgeId);
+            setSelectedNodeId(null);
+            setHudTab("FOCUS");
+            setIsHudOpen(true);
+          },
         },
       };
     });
@@ -1424,6 +2032,20 @@ function ArchifyGraphCanvas({
     [reactFlow, isViewLocked],
   );
 
+  // Handle Node Double Click (open source file in Explorer directly)
+  const onNodeDoubleClick: NodeMouseHandler<FlowNode> = useCallback(
+    (_, node) => {
+      if (node.type === "archifyNode") {
+        const data = node.data as ArchifyCustomNodeData;
+        const filePath = data.detailCard?.filePath || data.path;
+        if (filePath && !filePath.startsWith("(") && analysisId) {
+          window.open(`/projects/${analysisId}/files?path=${encodeURIComponent(filePath)}`, "_blank");
+        }
+      }
+    },
+    [analysisId],
+  );
+
   // Handle Edge Click
   const onEdgeClick: EdgeMouseHandler = useCallback(
     (_, edge) => {
@@ -1456,8 +2078,11 @@ function ArchifyGraphCanvas({
     const focusId = hoveredNodeId || selectedNodeId;
     if (!focusId) return null;
     const found = nodes.find((n) => n.id === focusId && n.type === "archifyNode");
-    return found ? (found.data as ArchifyCustomNodeData) : null;
-  }, [nodes, hoveredNodeId, selectedNodeId]);
+    if (!found) return null;
+    const data = found.data as ArchifyCustomNodeData;
+    const detailCard = data.detailCard || diagramDto?.detailCards?.find((dc) => dc.nodeId === focusId);
+    return { ...data, detailCard };
+  }, [nodes, hoveredNodeId, selectedNodeId, diagramDto]);
 
   // Find currently selected edge data
   const selectedEdgeData = useMemo(() => {
@@ -1523,17 +2148,18 @@ function ArchifyGraphCanvas({
 
   const isDark = theme === "dark";
 
-  // Tab definitions
+  // Tab definitions: strictly show only repository architecture when viewing an analyzed repo
   const tabs: { key: WorkflowPresetKey; label: string; file: string }[] = [];
   if (analysisId) {
-    tabs.push({ key: "05-repo", label: "🏛️ Live Architecture", file: `repo-${analysisId}.architecture.html` });
+    tabs.push({ key: "05-repo", label: "Live Architecture", file: `repo-${analysisId}.architecture.html` });
+  } else {
+    tabs.push(
+      { key: "01-agent", label: "01 Agent Tool Call", file: "agent-tool-call.workflow.html" },
+      { key: "02-deploy", label: "02 Production Deployment", file: "production-deploy.workflow.html" },
+      { key: "03-cache", label: "03 Cache Miss", file: "cache-miss.workflow.html" },
+      { key: "04-leave", label: "04 Annual Leave", file: "annual-leave.workflow.html" },
+    );
   }
-  tabs.push(
-    { key: "01-agent", label: "01 Agent Tool Call", file: "agent-tool-call.workflow.html" },
-    { key: "02-deploy", label: "02 Production Deployment", file: "production-deploy.workflow.html" },
-    { key: "03-cache", label: "03 Cache Miss", file: "cache-miss.workflow.html" },
-    { key: "04-leave", label: "04 Annual Leave", file: "annual-leave.workflow.html" },
-  );
 
   const currentTabInfo = tabs.find((t) => t.key === activeTab) || tabs[0];
 
@@ -1623,13 +2249,95 @@ function ArchifyGraphCanvas({
                             ? "#94a3b8"
                             : "#64748b",
                         transition: "all 0.18s ease",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
                       }}
                     >
+                      {tab.key === "05-repo" && <ArchitectureIcon size={13} color="currentColor" />}
                       {tab.label}
                     </button>
                   );
                 })}
               </div>
+
+              {/* Classification badge and diagram type buttons for live repo */}
+              {activeTab === "05-repo" && (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginLeft: "8px" }}>
+                  {classification && (
+                    <div
+                      title={classification.summary}
+                      style={{
+                        padding: "4px 9px",
+                        borderRadius: "7px",
+                        background: isDark ? "rgba(16, 185, 129, 0.15)" : "#d1fae5",
+                        border: `1px solid ${isDark ? "rgba(16, 185, 129, 0.4)" : "#10b981"}`,
+                        color: isDark ? "#34d399" : "#065f46",
+                        fontSize: "10.5px",
+                        fontWeight: 700,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "5px",
+                      }}
+                    >
+                      <span>📦 {classification.type}</span>
+                      <span style={{ fontSize: "9.5px", opacity: 0.85 }}>({classification.confidence})</span>
+                    </div>
+                  )}
+
+                  {availableDiagramTypes.length > 1 && (
+                    <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                      {availableDiagramTypes.map((dtype) => {
+                        const isCurActive =
+                          activeDiagramType === dtype ||
+                          (activeDiagramType === "default" && dtype === availableDiagramTypes[0]);
+                        return (
+                          <button
+                            key={dtype}
+                            type="button"
+                            onClick={() => {
+                              setActiveDiagramType(dtype);
+                              setSelectedNodeId(null);
+                              setSelectedEdgeId(null);
+                            }}
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              fontSize: "10.5px",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              border: `1px solid ${
+                                isCurActive
+                                  ? isDark
+                                    ? "#00f0ff"
+                                    : "#0284c7"
+                                  : isDark
+                                  ? "#334155"
+                                  : "#cbd5e1"
+                              }`,
+                              background: isCurActive
+                                ? isDark
+                                  ? "rgba(0, 240, 255, 0.15)"
+                                  : "#e0f2fe"
+                                : "transparent",
+                              color: isCurActive
+                                ? isDark
+                                  ? "#00f0ff"
+                                  : "#0284c7"
+                                : isDark
+                                ? "#94a3b8"
+                                : "#64748b",
+                              textTransform: "capitalize",
+                            }}
+                          >
+                            {dtype.replace(/_/g, " ")}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Middle: Search Node Finder Input */}
@@ -1638,7 +2346,7 @@ function ArchifyGraphCanvas({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="🔍 Find component..."
+                placeholder="Find component..."
                 style={{
                   padding: "5px 12px",
                   borderRadius: "20px",
@@ -1669,9 +2377,13 @@ function ArchifyGraphCanvas({
                   fontSize: "11px",
                   fontWeight: 700,
                   cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
                 }}
               >
-                {isTraceMotion ? "⚡ Flow On" : "Flow Off"}
+                <BoltIcon size={12} color={isTraceMotion ? (isDark ? "#00f0ff" : "#0284c7") : "currentColor"} />
+                <span>{isTraceMotion ? "Flow On" : "Flow Off"}</span>
               </button>
 
               {/* Theme Toggle */}
@@ -1688,9 +2400,13 @@ function ArchifyGraphCanvas({
                   fontSize: "11px",
                   fontWeight: 700,
                   cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
                 }}
               >
-                {isDark ? "☀️ Light" : "🌙 Dark"}
+                {isDark ? <SunIcon size={12} color="#f59e0b" /> : <MoonIcon size={12} color="#0284c7" />}
+                <span>{isDark ? "Light" : "Dark"}</span>
               </button>
 
               {/* Standalone HTML Export */}
@@ -1755,10 +2471,11 @@ function ArchifyGraphCanvas({
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
-                  gap: "4px",
+                  gap: "5px",
                 }}
               >
-                <span>{isViewLocked ? "🔒 Cố định" : "🔓 Tự do"}</span>
+                {isViewLocked ? <LockIcon size={12} /> : <UnlockIcon size={12} />}
+                <span>{isViewLocked ? "Cố định" : "Tự do"}</span>
               </button>
 
               {/* Inspector HUD Toggle Button */}
@@ -1777,10 +2494,11 @@ function ArchifyGraphCanvas({
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
-                  gap: "4px",
+                  gap: "5px",
                 }}
               >
-                <span>⚡ Inspector</span>
+                <BoltIcon size={12} color={isDark ? "#f97316" : "#ea580c"} />
+                <span>Inspector</span>
                 <span style={{ fontSize: "10px" }}>{isHudOpen ? "▴" : "▾"}</span>
               </button>
 
@@ -1798,9 +2516,13 @@ function ArchifyGraphCanvas({
                   fontSize: "11px",
                   fontWeight: 650,
                   cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
                 }}
               >
-                🗺️ Map
+                <MapIcon size={12} />
+                <span>Map</span>
               </button>
 
               {/* Reset Camera View */}
@@ -1861,6 +2583,11 @@ function ArchifyGraphCanvas({
                   opacity: 0;
                 }
               }
+
+              .react-flow__node-boundaryNode,
+              .react-flow__node-stageNode {
+                pointer-events: none !important;
+              }
             `}</style>
 
             <ReactFlow<FlowNode, Edge>
@@ -1871,11 +2598,12 @@ function ArchifyGraphCanvas({
               onNodesChange={handleNodesChange}
               onEdgesChange={onEdgesChange}
               onNodeClick={onNodeClick}
+              onNodeDoubleClick={onNodeDoubleClick}
               onNodeMouseEnter={onNodeMouseEnter}
               onNodeMouseLeave={onNodeMouseLeave}
               onEdgeClick={onEdgeClick}
               onPaneClick={onPaneClick}
-              nodesDraggable={false}
+              nodesDraggable={!isViewLocked}
               nodesConnectable={false}
               elementsSelectable={true}
               panOnDrag={!isViewLocked}
@@ -1923,6 +2651,96 @@ function ArchifyGraphCanvas({
               <Controls showInteractive={!isViewLocked} />
             </ReactFlow>
 
+            {/* Alert banner when status is NotDetected (e.g. Không phát hiện database) or Unsupported */}
+            {diagramDto && (diagramDto.status === "NotDetected" || diagramDto.status === "Unsupported") && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  zIndex: 30,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backdropFilter: "blur(6px)",
+                  background: isDark ? "rgba(7, 13, 24, 0.78)" : "rgba(248, 250, 252, 0.78)",
+                  padding: "20px",
+                }}
+              >
+                <div
+                  style={{
+                    maxWidth: 480,
+                    width: "100%",
+                    padding: "26px 28px",
+                    borderRadius: "16px",
+                    border: `1.5px solid ${
+                      diagramDto.status === "NotDetected"
+                        ? isDark
+                          ? "rgba(245, 158, 11, 0.45)"
+                          : "#f59e0b"
+                        : isDark
+                        ? "rgba(239, 68, 68, 0.45)"
+                        : "#ef4444"
+                    }`,
+                    background: isDark ? "#091424" : "#ffffff",
+                    boxShadow: isDark
+                      ? "0 25px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(245, 158, 11, 0.1)"
+                      : "0 20px 45px rgba(15, 23, 42, 0.12)",
+                    textAlign: "center",
+                    fontFamily: "'JetBrains Mono', Consolas, monospace",
+                  }}
+                >
+                  <div style={{ fontSize: "38px", marginBottom: "12px" }}>
+                    {diagramDto.status === "NotDetected" ? "🔍" : "⚠️"}
+                  </div>
+                  <h3
+                    style={{
+                      margin: "0 0 10px",
+                      fontSize: "16px",
+                      fontWeight: 800,
+                      color: isDark ? "#f8fafc" : "#0f172a",
+                    }}
+                  >
+                    {diagramDto.status === "NotDetected"
+                      ? "Không phát hiện thành phần tương ứng"
+                      : "Loại Repository không hỗ trợ sơ đồ này"}
+                  </h3>
+                  <p
+                    style={{
+                      margin: "0 0 18px",
+                      fontSize: "12px",
+                      color: isDark ? "#94a3b8" : "#475569",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {diagramDto.message ||
+                      (diagramDto.status === "NotDetected"
+                        ? "Không phát hiện mã nguồn hoặc cấu hình liên quan trong repository này (ví dụ: không có DbContext để vẽ sơ đồ ERD)."
+                        : "Cấu trúc mã nguồn của repository chưa tương thích với sơ đồ đã chọn.")}
+                  </p>
+                  {availableDiagramTypes.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveDiagramType(availableDiagramTypes[0]);
+                      }}
+                      style={{
+                        padding: "8px 18px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: isDark ? "#00f0ff" : "#0284c7",
+                        color: isDark ? "#08111e" : "#ffffff",
+                        fontSize: "12px",
+                        fontWeight: 750,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ← Quay lại sơ đồ chính ({availableDiagramTypes[0]})
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Collapsed Mini HUD Pill Button (takes zero space, unblocks the diagram view) */}
             {!isHudOpen && (
               <button
@@ -1949,7 +2767,8 @@ function ArchifyGraphCanvas({
                   zIndex: 35,
                 }}
               >
-                <span>⚡ Chi tiết & Công cụ</span>
+                <BoltIcon size={13} color={isDark ? "#00f0ff" : "#0284c7"} />
+                <span>Chi tiết & Công cụ</span>
                 <span style={{ fontSize: "10px", color: isDark ? "#94a3b8" : "#64748b" }}>({hudTab})</span>
                 <span style={{ fontSize: "9px" }}>▲ Mở</span>
               </button>
@@ -2092,8 +2911,9 @@ function ArchifyGraphCanvas({
 
                     {/* Route Probe Quick Selector */}
                     <div style={{ marginTop: "12px", padding: "10px", borderRadius: "8px", background: isDark ? "rgba(15, 23, 42, 0.6)" : "#f8fafc", border: `1px solid ${isDark ? "#1e293b" : "#e2e8f0"}` }}>
-                      <div style={{ fontSize: "10.5px", fontWeight: 750, color: "#ffbd2e", marginBottom: "6px" }}>
-                        ⚡ Route Probe (Path Tracer)
+                      <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10.5px", fontWeight: 750, color: "#ffbd2e", marginBottom: "6px" }}>
+                        <BoltIcon size={12} color="#ffbd2e" />
+                        <span>Route Probe (Path Tracer)</span>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "10.5px" }}>
                         <select
@@ -2156,23 +2976,72 @@ function ArchifyGraphCanvas({
                   <div>
                     {selectedNodeData ? (
                       <>
-                        <h3 style={{ margin: "4px 0 6px", fontSize: "14px", fontWeight: 750, color: isDark ? "#00f0ff" : "#0284c7" }}>
-                          {selectedNodeData.label}
-                        </h3>
-                        <p style={{ margin: "0 0 6px", fontSize: "11px", color: isDark ? "#94a3b8" : "#475569", lineHeight: 1.5 }}>
-                          Role: {selectedNodeData.subtitle || selectedNodeData.kind} • Category: {selectedNodeData.category.toUpperCase()}
-                        </p>
+                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", margin: "4px 0 6px" }}>
+                          <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 750, color: isDark ? "#00f0ff" : "#0284c7" }}>
+                            {selectedNodeData.detailCard?.title || selectedNodeData.label}
+                          </h3>
+                          <span
+                            style={{
+                              padding: "2px 7px",
+                              borderRadius: "4px",
+                              fontSize: "9.5px",
+                              fontWeight: 800,
+                              background: isDark ? "rgba(0, 240, 255, 0.15)" : "#e0f2fe",
+                              border: `1px solid ${isDark ? "rgba(0, 240, 255, 0.35)" : "#38bdf8"}`,
+                              color: isDark ? "#38bdf8" : "#0284c7",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {selectedNodeData.detailCard?.role || selectedNodeData.role || selectedNodeData.subtitle || selectedNodeData.kind}
+                          </span>
+                        </div>
 
-                        {selectedNodeData.path && (
-                          <p style={{ margin: "0 0 8px", fontSize: "10px", color: isDark ? "#64748b" : "#94a3b8", wordBreak: "break-all" }}>
-                            📁 {selectedNodeData.path}
+                        {/* Category & Symbol */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "8px", fontSize: "10px" }}>
+                          <span style={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+                            Category: <strong style={{ color: isDark ? "#f8fafc" : "#0f172a" }}>{selectedNodeData.category.toUpperCase()}</strong>
+                          </span>
+                          {selectedNodeData.detailCard?.symbol && (
+                            <span style={{ color: isDark ? "#2dd4bf" : "#059669" }}>
+                              • Symbol: <strong>{selectedNodeData.detailCard.symbol}</strong>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Line Range with SRC n Label */}
+                        {(selectedNodeData.detailCard?.lineRange || selectedNodeData.extraText) && (
+                          <div
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "5px",
+                              padding: "3px 8px",
+                              borderRadius: "5px",
+                              background: isDark ? "rgba(245, 158, 11, 0.12)" : "#fef3c7",
+                              border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.35)" : "#f59e0b"}`,
+                              color: isDark ? "#fbbf24" : "#b45309",
+                              fontSize: "10px",
+                              fontWeight: 700,
+                              marginBottom: "8px",
+                            }}
+                          >
+                            <span>📍</span>
+                            <span>{selectedNodeData.detailCard?.lineRange || selectedNodeData.extraText}</span>
+                          </div>
+                        )}
+
+                        {/* File path */}
+                        {(selectedNodeData.detailCard?.filePath || selectedNodeData.path) && (
+                          <p style={{ display: "flex", alignItems: "center", gap: "5px", margin: "0 0 6px", fontSize: "10px", color: isDark ? "#64748b" : "#94a3b8", wordBreak: "break-all" }}>
+                            <FolderIcon size={12} />
+                            <span>{selectedNodeData.detailCard?.filePath || selectedNodeData.path}</span>
                           </p>
                         )}
 
                         {/* Open File in Explorer Link */}
-                        {analysisId && selectedNodeData.path && (
+                        {analysisId && (selectedNodeData.detailCard?.filePath || selectedNodeData.path) && !(selectedNodeData.detailCard?.filePath || selectedNodeData.path)?.startsWith("(") && (
                           <Link
-                            href={`/projects/${analysisId}/files?path=${encodeURIComponent(selectedNodeData.path)}`}
+                            href={`/projects/${analysisId}/files?path=${encodeURIComponent(selectedNodeData.detailCard?.filePath || selectedNodeData.path || "")}`}
                             style={{
                               display: "inline-block",
                               marginBottom: "10px",
@@ -2185,46 +3054,120 @@ function ArchifyGraphCanvas({
                           </Link>
                         )}
 
-                        {/* Direction Trace Buttons */}
-                        <div style={{ display: "flex", gap: "6px", marginTop: "4px" }}>
-                          <button
-                            type="button"
-                            onClick={() => setTraceDirection("upstream")}
+                        {/* Detail Description */}
+                        {selectedNodeData.detailCard?.description && (
+                          <div
                             style={{
-                              flex: 1,
-                              padding: "6px 8px",
-                              fontSize: "10px",
-                              fontWeight: 700,
-                              borderRadius: "6px",
-                              border: `1px solid ${isDark ? "#38bdf8" : "#0284c7"}`,
-                              background: traceDirection === "upstream" ? (isDark ? "rgba(56, 189, 248, 0.3)" : "#bae6fd") : isDark ? "rgba(56, 189, 248, 0.12)" : "#e0f2fe",
-                              color: isDark ? "#38bdf8" : "#0284c7",
-                              cursor: "pointer",
+                              padding: "8px 10px",
+                              borderRadius: "7px",
+                              background: isDark ? "rgba(15, 23, 42, 0.65)" : "#f1f5f9",
+                              border: `1px solid ${isDark ? "#1e293b" : "#e2e8f0"}`,
+                              fontSize: "10.5px",
+                              color: isDark ? "#cbd5e1" : "#334155",
+                              lineHeight: 1.55,
+                              marginBottom: "10px",
                             }}
                           >
-                            ↑ Upstream
-                          </button>
+                            {selectedNodeData.detailCard.description}
+                          </div>
+                        )}
+
+                        {/* Child Diagram Drill-down button (if available) */}
+                        {selectedNodeData.childDiagramType && (
                           <button
                             type="button"
-                            onClick={() => setTraceDirection("downstream")}
+                            onClick={() => {
+                              if (selectedNodeData.childDiagramType) {
+                                setActiveDiagramType(selectedNodeData.childDiagramType);
+                                setSelectedNodeId(null);
+                              }
+                            }}
                             style={{
-                              flex: 1,
-                              padding: "6px 8px",
-                              fontSize: "10px",
-                              fontWeight: 700,
-                              borderRadius: "6px",
-                              border: `1px solid ${isDark ? "#2dd4bf" : "#059669"}`,
-                              background: traceDirection === "downstream" ? (isDark ? "rgba(45, 212, 191, 0.3)" : "#a7f3d0") : isDark ? "rgba(45, 212, 191, 0.12)" : "#d1fae5",
-                              color: isDark ? "#2dd4bf" : "#059669",
+                              width: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "6px",
+                              padding: "7px 10px",
+                              borderRadius: "7px",
+                              border: `1.5px solid ${isDark ? "#a855f7" : "#7c3aed"}`,
+                              background: isDark ? "rgba(168, 85, 247, 0.18)" : "#f3e8ff",
+                              color: isDark ? "#c084fc" : "#6d28d9",
+                              fontSize: "11px",
+                              fontWeight: 750,
                               cursor: "pointer",
+                              marginBottom: "10px",
                             }}
                           >
-                            ↓ Downstream
+                            <span>🔍 Mở sơ đồ chi tiết:</span>
+                            <strong style={{ textTransform: "capitalize" }}>{selectedNodeData.childDiagramType}</strong>
+                            <span>→</span>
                           </button>
+                        )}
+
+                        {/* Direction Trace Buttons: Trace Reach */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "2px" }}>
+                          <div style={{ fontSize: "10px", fontWeight: 700, color: isDark ? "#94a3b8" : "#64748b" }}>
+                            Trace Reach (Ảnh hưởng & Phụ thuộc):
+                          </div>
+                          <div style={{ display: "flex", gap: "6px" }}>
+                            <button
+                              type="button"
+                              onClick={() => setTraceDirection("upstream")}
+                              title="Xem các thành phần gọi đến hoặc phụ thuộc vào node này"
+                              style={{
+                                flex: 1,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "4px",
+                                padding: "6px 8px",
+                                fontSize: "10px",
+                                fontWeight: 700,
+                                borderRadius: "6px",
+                                border: `1px solid ${isDark ? "#38bdf8" : "#0284c7"}`,
+                                background: traceDirection === "upstream" ? (isDark ? "rgba(56, 189, 248, 0.3)" : "#bae6fd") : isDark ? "rgba(56, 189, 248, 0.12)" : "#e0f2fe",
+                                color: isDark ? "#38bdf8" : "#0284c7",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <ArrowUpIcon size={11} />
+                              <span>Ai phụ thuộc nó</span>
+                              {selectedNodeData.detailCard?.upstreamNodes && (
+                                <span style={{ opacity: 0.85 }}>({selectedNodeData.detailCard.upstreamNodes.length})</span>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setTraceDirection("downstream")}
+                              title="Xem các thành phần mà node này gọi đến hoặc phụ thuộc"
+                              style={{
+                                flex: 1,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "4px",
+                                padding: "6px 8px",
+                                fontSize: "10px",
+                                fontWeight: 700,
+                                borderRadius: "6px",
+                                border: `1px solid ${isDark ? "#2dd4bf" : "#059669"}`,
+                                background: traceDirection === "downstream" ? (isDark ? "rgba(45, 212, 191, 0.3)" : "#a7f3d0") : isDark ? "rgba(45, 212, 191, 0.12)" : "#d1fae5",
+                                color: isDark ? "#2dd4bf" : "#059669",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <ArrowDownIcon size={11} />
+                              <span>Nó phụ thuộc vào</span>
+                              {selectedNodeData.detailCard?.downstreamNodes && (
+                                <span style={{ opacity: 0.85 }}>({selectedNodeData.detailCard.downstreamNodes.length})</span>
+                              )}
+                            </button>
+                          </div>
                         </div>
 
                         {/* Quick Route Probe Setters */}
-                        <div style={{ display: "flex", gap: "6px", marginTop: "6px" }}>
+                        <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
                           <button
                             type="button"
                             onClick={() => setRouteStartId(selectedNodeData.id)}
@@ -2473,22 +3416,40 @@ function ArchifyGraphCanvas({
               )}
             </div>
 
-            {/* Right: Architecture Layer Legend */}
-            <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <i style={{ display: "inline-block", width: 9, height: 9, borderRadius: 2, background: "#00f0ff" }} />
+            {/* Right: Architecture Layer & Edge Legend */}
+            <div style={{ display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap", fontSize: "10.5px" }}>
+              {/* Edge Style Legend */}
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ display: "inline-block", width: 16, height: 2, background: isDark ? "#00f0ff" : "#0284c7" }} />
+                <span>Code Evidence</span>
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: 16,
+                    height: 0,
+                    borderTop: `2px dashed ${isDark ? "#38bdf8" : "#0284c7"}`,
+                  }}
+                />
+                <span>Suy luận luồng</span>
+              </span>
+
+              {/* Role / Layer Colors */}
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "#00f0ff" }} />
                 Gateway / UI
               </span>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <i style={{ display: "inline-block", width: 9, height: 9, borderRadius: 2, background: "#2dd4bf" }} />
-                Core Runtime
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "#2dd4bf" }} />
+                Controller / Service
               </span>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <i style={{ display: "inline-block", width: 9, height: 9, borderRadius: 2, background: "#a855f7" }} />
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "#a855f7" }} />
                 Data / DB
               </span>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <i style={{ display: "inline-block", width: 9, height: 9, borderRadius: 2, background: "#f97316" }} />
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "#f97316" }} />
                 External / Cloud
               </span>
             </div>

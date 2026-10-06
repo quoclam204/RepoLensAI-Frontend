@@ -29,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="page-shell header-inner">
               <Link className="brand" href="/">
                 <span className="brand-mark" aria-hidden="true">
-                  <RepoLensIcon size={20} color="currentColor" />
+                  <RepoLensIcon size={22} variant="gradient" />
                 </span>
                 <span>RepoLens <strong>AI</strong></span>
               </Link>

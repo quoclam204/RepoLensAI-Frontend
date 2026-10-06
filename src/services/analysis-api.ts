@@ -2,6 +2,8 @@ import { apiRequest } from "@/services/api-client";
 import type {
   AnalysisSummary,
   ArchitectureResponse,
+  ArchifyV3Document,
+  ArchitectureTraceResponse,
   ChatRequest,
   ChatResponse,
   CreateAnalysisRequest,
@@ -24,30 +26,130 @@ const analysisPath = (analysisId: string) =>
   `/api/analyses/${encodeURIComponent(analysisId)}`;
 
 export const analysisApi = {
-  createFromGitUrl(request: CreateAnalysisRequest) {
-    return apiRequest<AnalysisSummary>("/api/analyses", {
+  async createFromGitUrl(request: CreateAnalysisRequest): Promise<AnalysisSummary> {
+    const data = await apiRequest<{
+      analysisId: string;
+      repositoryId: string;
+      status: string;
+      createdAt: string;
+    }>("/api/analyses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
+      body: JSON.stringify({
+        sourceType: "GitUrl",
+        sourceUrl: request.repositoryUrl,
+      }),
     });
+    return {
+      id: data.analysisId,
+      status: data.status as AnalysisSummary["status"],
+      repositoryName: request.repositoryUrl.split("/").filter(Boolean).pop()?.replace(/\.git$/i, "") || "Git Repository",
+      repositoryUrl: request.repositoryUrl,
+      progress: 0,
+      createdAt: data.createdAt,
+      updatedAt: data.createdAt,
+    };
   },
-  createFromZip(file: File) {
+  async createFromZip(file: File): Promise<AnalysisSummary> {
     const body = new FormData();
-    body.append("repositoryZip", file);
-    return apiRequest<AnalysisSummary>("/api/analyses", {
+    body.append("file", file);
+    const data = await apiRequest<{
+      analysisId: string;
+      repositoryId: string;
+      status: string;
+      createdAt: string;
+    }>("/api/analyses/upload", {
       method: "POST",
       body,
     });
+    return {
+      id: data.analysisId,
+      status: data.status as AnalysisSummary["status"],
+      repositoryName: file.name.replace(/\.zip$/i, "") || "Uploaded repository",
+      progress: 0,
+      createdAt: data.createdAt,
+      updatedAt: data.createdAt,
+    };
   },
-  get(analysisId: string) {
-    return apiRequest<AnalysisSummary>(analysisPath(analysisId));
+  async get(analysisId: string): Promise<AnalysisSummary> {
+    const data = await apiRequest<{
+      id: string;
+      repositoryId: string;
+      status: string;
+      stage: string;
+      progress: number;
+      startedAt: string;
+      completedAt?: string | null;
+      error?: string | null;
+    }>(analysisPath(analysisId));
+
+    return {
+      id: data.id,
+      status: data.status as AnalysisSummary["status"],
+      repositoryName: "Repository",
+      progress: data.progress ?? 0,
+      createdAt: data.startedAt,
+      updatedAt: data.completedAt ?? data.startedAt,
+      failureReason: data.error ?? undefined,
+    };
   },
-  overview(analysisId: string) {
-    return apiRequest<RepositoryOverview>(`${analysisPath(analysisId)}/overview`);
+  async overview(analysisId: string): Promise<RepositoryOverview> {
+    const data = await apiRequest<{
+      analysisId: string;
+      repository: {
+        name: string;
+        sourceType: string;
+        sourceUrl: string;
+        commitHash?: string | null;
+      };
+      statistics: {
+        projects: number;
+        sourceFiles: number;
+        symbols: number;
+        dependencies: number;
+        apiEndpoints: number;
+        databaseEntities: number;
+      };
+      languages: Array<{
+        name: string;
+        fileCount: number;
+        percentage: number;
+        support: string;
+      }>;
+    }>(`${analysisPath(analysisId)}/overview`);
+
+    return {
+      repositoryName: data.repository?.name || "Repository",
+      defaultBranch: data.repository?.commitHash || "main",
+      fileCount: data.statistics?.sourceFiles ?? 0,
+      lineCount: 0,
+      projectCount: data.statistics?.projects ?? 0,
+      symbolCount: data.statistics?.symbols ?? 0,
+      endpointCount: data.statistics?.apiEndpoints ?? 0,
+      databaseEntityCount: data.statistics?.databaseEntities ?? 0,
+      languages: (data.languages || []).map((l) => ({
+        name: l.name,
+        percentage: l.percentage,
+      })),
+      projects: [],
+    };
   },
   architecture(analysisId: string) {
     return apiRequest<ArchitectureResponse>(`${analysisPath(analysisId)}/architecture`);
   },
+  archifyV3(analysisId: string) {
+    return apiRequest<ArchifyV3Document>(`${analysisPath(analysisId)}/architecture/v3`);
+  },
+  exportArchifyHtmlUrl(analysisId: string, theme = "dark") {
+    return `/api/analyses/${encodeURIComponent(analysisId)}/architecture/export/html?theme=${encodeURIComponent(theme)}`;
+  },
+  traceRoute(analysisId: string, from: string, to: string) {
+    const query = new URLSearchParams({ from, to });
+    return apiRequest<ArchitectureTraceResponse>(
+      `${analysisPath(analysisId)}/architecture/trace?${query}`,
+    );
+  },
+
   dependencies(analysisId: string, page = 1, pageSize = 100) {
     const query = new URLSearchParams({
       page: page.toString(),
@@ -104,6 +206,17 @@ export const analysisApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(request),
     });
+  },
+  classification(analysisId: string) {
+    return apiRequest<import("@/types/api").RepositoryClassification>(
+      `${analysisPath(analysisId)}/classification`,
+    );
+  },
+  diagram(analysisId: string, diagramType?: string) {
+    const path = diagramType
+      ? `${analysisPath(analysisId)}/diagrams/${encodeURIComponent(diagramType)}`
+      : `${analysisPath(analysisId)}/diagrams`;
+    return apiRequest<import("@/types/api").DiagramDto>(path);
   },
 };
 

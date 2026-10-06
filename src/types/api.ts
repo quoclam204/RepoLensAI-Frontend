@@ -251,6 +251,7 @@ export interface EvidenceReference {
   symbol?: string;
   startLine?: number;
   endLine?: number;
+  description?: string;
 }
 
 export interface ChatRequest {
@@ -262,3 +263,125 @@ export interface ChatResponse {
   confidence: ConfidenceLevel;
   evidence: EvidenceReference[];
 }
+
+export interface ArchifyV3Component {
+  id: string;
+  type: string;
+  label: string;
+  sublabel?: string;
+  tag?: string;
+  icon?: string;
+  category?: string;
+  sources?: string[];
+}
+
+export interface ArchifyV3Boundary {
+  id: string;
+  kind: string;
+  label: string;
+  category?: string;
+  wraps: string[];
+}
+
+export interface ArchifyV3Connection {
+  id: string;
+  from: string;
+  to: string;
+  label?: string;
+  variant?: string;
+  evidenceId?: string;
+  confidence?: string;
+}
+
+export interface ArchifyV3Document {
+  schema_version: number;
+  diagram_type: string;
+  meta: {
+    title: string;
+    subtitle?: string;
+    animation?: string;
+    quality_profile?: string;
+  };
+  components: ArchifyV3Component[];
+  boundaries: ArchifyV3Boundary[];
+  connections: ArchifyV3Connection[];
+}
+
+export interface ArchitectureTraceResponse {
+  analysisId: string;
+  fromNodeId: string;
+  toNodeId: string;
+  found: boolean;
+  pathNodes: ArchitectureNode[];
+  pathEdges: ArchitectureEdge[];
+  evidences: EvidenceSnippet[];
+}
+
+export type RepositoryType =
+  | "ApiBackend"
+  | "Frontend"
+  | "Monorepo"
+  | "Library"
+  | "Cli"
+  | "Unsupported";
+
+export interface ClassificationEvidence {
+  filePath: string;
+  reason: string;
+  layer: number;
+}
+
+export interface RepositoryClassification {
+  type: RepositoryType;
+  detectedLanguages: string[];
+  confidence: ConfidenceLevel;
+  evidences: ClassificationEvidence[];
+  summary: string;
+}
+
+export interface DiagramNodeDto {
+  id: string;
+  label: string;
+  kind: string;
+  role: string;
+  parentId?: string | null;
+  evidence: string[];
+  childDiagramType?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface DiagramEdgeDto {
+  id: string;
+  from: string;
+  to: string;
+  kind: string;
+  label?: string | null;
+  confidence: string;
+  isInferred: boolean;
+}
+
+export interface DiagramDetailCardDto {
+  nodeId: string;
+  title: string;
+  role: string;
+  filePath: string;
+  symbol?: string | null;
+  lineRange?: string | null;
+  description?: string | null;
+  upstreamNodes: string[];
+  downstreamNodes: string[];
+}
+
+export interface DiagramDto {
+  diagramType: string;
+  repositoryType: RepositoryType;
+  status: "Success" | "NotDetected" | "Unsupported";
+  message?: string | null;
+  databaseDetected: boolean;
+  availableDiagramTypes: string[];
+  nodes: DiagramNodeDto[];
+  edges: DiagramEdgeDto[];
+  detailCards: DiagramDetailCardDto[];
+}
+
+

@@ -31,7 +31,20 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   });
 
   if (!response.ok) {
-    const message = await response.text();
+    const raw = await response.text();
+    let message = raw;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed.error?.message) {
+        message = parsed.error.message;
+      } else if (parsed.errors && typeof parsed.errors === "object") {
+        message = Object.values(parsed.errors).flat().join(" ");
+      } else if (parsed.title) {
+        message = parsed.title;
+      }
+    } catch {
+      // ignore json parse error
+    }
     throw new ApiError(message || `Backend returned HTTP ${response.status}.`, response.status);
   }
 

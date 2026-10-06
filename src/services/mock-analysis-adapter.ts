@@ -1,6 +1,8 @@
 import type {
   AnalysisStatus,
   AnalysisSummary,
+  ChatRequest,
+  ChatResponse,
   DatabaseEntityDetail,
   DatabaseModel,
   EndpointDetail,
@@ -88,20 +90,35 @@ function toSummary(record: StoredAnalysis): AnalysisSummary {
 
 const demoGraph: VisualGraph = {
   nodes: [
-    { id: "api", label: "RepoLens.Api", kind: "Project", path: "src/RepoLens.Api", metadata: { language: "C#", projectType: "Web API" } },
-    { id: "application", label: "RepoLens.Application", kind: "Project", path: "src/RepoLens.Application", metadata: { language: "C#", projectType: "Class Library" } },
-    { id: "domain", label: "RepoLens.Domain", kind: "Project", path: "src/RepoLens.Domain", metadata: { language: "C#", projectType: "Class Library" } },
-    { id: "infrastructure", label: "RepoLens.Infrastructure", kind: "Project", path: "src/RepoLens.Infrastructure", metadata: { language: "C#", projectType: "Class Library" } },
-    { id: "analysis", label: "RepoLens.Analysis", kind: "Project", path: "src/RepoLens.Analysis", metadata: { language: "C#", projectType: "Analyzer" } },
+    // 01 / User Interface
+    { id: "user", label: "User", kind: "User Interface", path: "src/Client", metadata: { projectType: "asks for work", language: "TypeScript" } },
+    { id: "chat", label: "Chat Surface", kind: "User Interface", path: "src/Client/Chat", metadata: { projectType: "thread + files", language: "TypeScript" } },
+    { id: "final-reply", label: "Final Reply", kind: "User Interface", path: "src/Client/Output", metadata: { projectType: "answer + changes", language: "TypeScript" } },
+    // 02 / Agent Runtime
+    { id: "planner", label: "Agent Planner", kind: "Agent Runtime", path: "src/RepoLens.Application/Planner", metadata: { projectType: "plan next step", language: "C#" } },
+    { id: "router", label: "Tool Router", kind: "Agent Runtime", path: "src/RepoLens.Application/Router", metadata: { projectType: "choose capability", language: "C#" } },
+    // EX / Policy & Recovery
+    { id: "approval", label: "Approval Gate", kind: "Policy Gate", path: "src/RepoLens.Application/Security", metadata: { projectType: "scope + consent", language: "C#" } },
+    { id: "blocked", label: "Blocked", kind: "Policy Gate", path: "src/RepoLens.Application/Security", metadata: { projectType: "wait or reject", language: "C#" } },
+    { id: "retry", label: "Retry Path", kind: "Policy Gate", path: "src/RepoLens.Application/Recovery", metadata: { projectType: "revise request", language: "C#" } },
+    { id: "tool-call", label: "Tool Call", kind: "Tool Work", path: "src/RepoLens.Infrastructure/Tools", metadata: { projectType: "shell / browser / MCP", language: "C#" } },
+    { id: "external-api", label: "External API", kind: "External Service", path: "src/RepoLens.Infrastructure/Network", metadata: { projectType: "network service", language: "C#" } },
+    { id: "trace-log", label: "Trace Log", kind: "Trace & Memory", path: "src/RepoLens.Infrastructure/Logs", metadata: { projectType: "events + output", language: "C#" } },
   ],
   edges: [
-    { id: "api-application", source: "api", target: "application", relationship: "ProjectReference", confidence: "confirmed" },
-    { id: "api-infrastructure", source: "api", target: "infrastructure", relationship: "ProjectReference", confidence: "confirmed" },
-    { id: "infrastructure-application", source: "infrastructure", target: "application", relationship: "ProjectReference", confidence: "confirmed" },
-    { id: "application-domain", source: "application", target: "domain", relationship: "ProjectReference", confidence: "confirmed" },
-    { id: "analysis-application", source: "analysis", target: "application", relationship: "ProjectReference", confidence: "confirmed" },
+    { id: "e-user-chat", source: "user", target: "chat", relationship: "asks", confidence: "confirmed" },
+    { id: "e-chat-planner", source: "chat", target: "planner", relationship: "plan", confidence: "confirmed" },
+    { id: "e-planner-router", source: "planner", target: "router", relationship: "dispatch", confidence: "confirmed" },
+    { id: "e-router-approval", source: "router", target: "approval", relationship: "needs approval?", confidence: "confirmed" },
+    { id: "e-approval-blocked", source: "approval", target: "blocked", relationship: "denied", confidence: "confirmed" },
+    { id: "e-blocked-retry", source: "blocked", target: "retry", relationship: "revise", confidence: "confirmed" },
+    { id: "e-approval-tool", source: "approval", target: "tool-call", relationship: "approved", confidence: "confirmed" },
+    { id: "e-tool-api", source: "tool-call", target: "external-api", relationship: "invoke", confidence: "confirmed" },
+    { id: "e-tool-trace", source: "tool-call", target: "trace-log", relationship: "record result", confidence: "confirmed" },
+    { id: "e-trace-planner", source: "trace-log", target: "planner", relationship: "trace + memory", confidence: "confirmed" },
+    { id: "e-router-final", source: "router", target: "final-reply", relationship: "complete", confidence: "confirmed" },
   ],
-  totalRelationships: 5,
+  totalRelationships: 11,
 };
 
 const demoEndpoints: EndpointItem[] = [
@@ -260,5 +277,168 @@ export const mockAnalysisAdapter = {
     const file = demoFiles.find((item) => symbolId.includes(item.id)) ?? demoFiles[0];
     const name = file.path.split("/").at(-1)?.replace(/\.[^.]+$/, "") ?? "Module";
     return { id: symbolId, name, fullName: file.path, type: "Class", file: { id: file.id, path: file.path }, startLine: 8, endLine: 48, relationships: [] };
+  },
+  async chat(request: ChatRequest): Promise<ChatResponse> {
+    await wait(620);
+    const normalized = request.question.toLowerCase();
+
+    if (normalized.includes("architecture") || normalized.includes("kiến trúc")) {
+      return {
+        answer: "The demo repository follows a layered .NET structure: the API project exposes HTTP routes, Application owns contracts and orchestration, Domain contains core entities, and Infrastructure implements persistence and external concerns.",
+        confidence: "High",
+        evidence: [
+          { id: "chat-architecture-api", filePath: "src/RepoLens.Api/Program.cs", startLine: 1, endLine: 42, description: "Application startup and service composition." },
+          { id: "chat-architecture-di", filePath: "src/RepoLens.Infrastructure/DependencyInjection.cs", symbol: "AddInfrastructure", startLine: 8, endLine: 37, description: "Infrastructure registration boundary." },
+        ],
+      };
+    }
+
+    if (normalized.includes("endpoint") || normalized.includes("api")) {
+      return {
+        answer: "The demo analysis includes REST endpoints grouped under analysis-scoped controllers. Each detected endpoint can be traced to its controller action and source location in the API explorer.",
+        confidence: "High",
+        evidence: [
+          { id: "chat-endpoint", filePath: "src/RepoLens.Api/Controllers/AnalysesController.cs", symbol: "AnalysesController", startLine: 9, endLine: 58, description: "Analysis lifecycle endpoints." },
+        ],
+      };
+    }
+
+    if (normalized.includes("database") || normalized.includes("entity") || normalized.includes("dữ liệu")) {
+      return {
+        answer: "The demo persistence model links an Analysis to Projects and each Project to its SourceFiles. Open the Database section to inspect detected properties and relationship confidence.",
+        confidence: "Medium",
+        evidence: [
+          { id: "chat-database", filePath: "src/RepoLens.Infrastructure/Persistence/RepoLensDbContext.cs", symbol: "RepoLensDbContext", startLine: 8, endLine: 46, description: "Entity sets and persistence model entry point." },
+        ],
+      };
+    }
+
+    return {
+      answer: "This is a demo response because no backend URL is configured. I can answer sample questions about architecture, API endpoints, or the database model while preserving the same confidence and evidence contract used by the real API.",
+      confidence: "Unknown",
+      evidence: [],
+    };
+  },
+  async classification(): Promise<import("@/types/api").RepositoryClassification> {
+    await wait(200);
+    return {
+      type: "ApiBackend",
+      detectedLanguages: ["C#", "TypeScript"],
+      confidence: "High",
+      evidences: [
+        { filePath: "src/RepoLens.Api/RepoLens.Api.csproj", reason: ".NET project file found", layer: 1 },
+        { filePath: "src/RepoLens.Api/Controllers/AnalysesController.cs", reason: "API controller detected", layer: 2 },
+        { filePath: "src/RepoLens.Infrastructure/Persistence/RepoLensDbContext.cs", reason: "DbContext subclass found", layer: 2 },
+      ],
+      summary: "API backend project (C#). Database layer detected. Request flow: Controller → Service → Repository → Database.",
+    };
+  },
+  async diagram(diagramType?: string): Promise<import("@/types/api").DiagramDto> {
+    await wait(250);
+    const type = diagramType || "architecture";
+    return {
+      diagramType: type,
+      repositoryType: "ApiBackend",
+      status: "Success",
+      databaseDetected: true,
+      availableDiagramTypes: ["architecture", "endpoints", "erd"],
+      nodes: [
+        { id: "node-client", label: "HTTP Client / Request", kind: "gateway", role: "General", evidence: ["(HTTP Gateway)"] },
+        { id: "ctrl-analyses", label: "AnalysesController", kind: "controller", role: "Controller", evidence: ["src/RepoLens.Api/Controllers/AnalysesController.cs", "SRC 1 (L9-L105)"] },
+        { id: "ctrl-arch", label: "ArchitectureController", kind: "controller", role: "Controller", evidence: ["src/RepoLens.Api/Controllers/ArchitectureController.cs", "SRC 1 (L9-L150)"] },
+        { id: "svc-analysis", label: "AnalysisService", kind: "service", role: "Service", evidence: ["src/RepoLens.Infrastructure/Services/AnalysisService.cs", "SRC 1 (L15-L250)"] },
+        { id: "svc-diagram", label: "DiagramService", kind: "service", role: "Service", evidence: ["src/RepoLens.Infrastructure/Services/DiagramService.cs", "SRC 1 (L20-L400)"] },
+        { id: "repo-db", label: "RepoLensDbContext", kind: "repository", role: "Repository", evidence: ["src/RepoLens.Infrastructure/Persistence/RepoLensDbContext.cs", "SRC 1 (L10-L80)"] },
+        { id: "db-main", label: "PostgreSQL Database", kind: "database", role: "Database", evidence: ["PostgreSQL / Npgsql"] },
+      ],
+      edges: [
+        { id: "e1", from: "node-client", to: "ctrl-analyses", kind: "calls", label: "HTTP POST/GET", confidence: "High", isInferred: true },
+        { id: "e2", from: "node-client", to: "ctrl-arch", kind: "calls", label: "HTTP GET", confidence: "High", isInferred: true },
+        { id: "e3", from: "ctrl-analyses", to: "svc-analysis", kind: "calls", label: "Calls", confidence: "High", isInferred: false },
+        { id: "e4", from: "ctrl-arch", to: "svc-diagram", kind: "calls", label: "Calls", confidence: "High", isInferred: false },
+        { id: "e5", from: "svc-analysis", to: "repo-db", kind: "queries", label: "Accesses", confidence: "High", isInferred: false },
+        { id: "e6", from: "svc-diagram", to: "repo-db", kind: "queries", label: "Accesses", confidence: "High", isInferred: false },
+        { id: "e7", from: "repo-db", to: "db-main", kind: "queries", label: "EF Core / SQL", confidence: "High", isInferred: false },
+      ],
+      detailCards: [
+        {
+          nodeId: "node-client",
+          title: "HTTP Client / Request",
+          role: "General",
+          filePath: "(HTTP Gateway)",
+          symbol: "HTTP Client",
+          lineRange: "SRC 1",
+          description: "Điểm khởi đầu nhận yêu cầu HTTP từ bên ngoài hệ thống.",
+          upstreamNodes: [],
+          downstreamNodes: ["ctrl-analyses", "ctrl-arch"],
+        },
+        {
+          nodeId: "ctrl-analyses",
+          title: "AnalysesController",
+          role: "Controller",
+          filePath: "src/RepoLens.Api/Controllers/AnalysesController.cs",
+          symbol: "AnalysesController",
+          lineRange: "SRC 1 (L9-L105)",
+          description: "Controller tiếp nhận và xử lý vòng đời phân tích repository.",
+          upstreamNodes: ["node-client"],
+          downstreamNodes: ["svc-analysis"],
+        },
+        {
+          nodeId: "ctrl-arch",
+          title: "ArchitectureController",
+          role: "Controller",
+          filePath: "src/RepoLens.Api/Controllers/ArchitectureController.cs",
+          symbol: "ArchitectureController",
+          lineRange: "SRC 1 (L9-L150)",
+          description: "Controller cung cấp dữ liệu kiến trúc và đồ thị trực quan hóa.",
+          upstreamNodes: ["node-client"],
+          downstreamNodes: ["svc-diagram"],
+        },
+        {
+          nodeId: "svc-analysis",
+          title: "AnalysisService",
+          role: "Service",
+          filePath: "src/RepoLens.Infrastructure/Services/AnalysisService.cs",
+          symbol: "AnalysisService",
+          lineRange: "SRC 1 (L15-L250)",
+          description: "Service điều phối quá trình tải, scan và phân tích mã nguồn.",
+          upstreamNodes: ["ctrl-analyses"],
+          downstreamNodes: ["repo-db"],
+        },
+        {
+          nodeId: "svc-diagram",
+          title: "DiagramService",
+          role: "Service",
+          filePath: "src/RepoLens.Infrastructure/Services/DiagramService.cs",
+          symbol: "DiagramService",
+          lineRange: "SRC 1 (L20-L400)",
+          description: "Service sinh sơ đồ chuyên biệt theo loại repository.",
+          upstreamNodes: ["ctrl-arch"],
+          downstreamNodes: ["repo-db"],
+        },
+        {
+          nodeId: "repo-db",
+          title: "RepoLensDbContext",
+          role: "Repository",
+          filePath: "src/RepoLens.Infrastructure/Persistence/RepoLensDbContext.cs",
+          symbol: "RepoLensDbContext",
+          lineRange: "SRC 1 (L10-L80)",
+          description: "Tầng truy cập dữ liệu sử dụng EF Core và PostgreSQL.",
+          upstreamNodes: ["svc-analysis", "svc-diagram"],
+          downstreamNodes: ["db-main"],
+        },
+        {
+          nodeId: "db-main",
+          title: "PostgreSQL Database",
+          role: "Database",
+          filePath: "PostgreSQL",
+          symbol: "Database",
+          lineRange: "SRC 1",
+          description: "Cơ sở dữ liệu lưu trữ kết quả phân tích và embedding.",
+          upstreamNodes: ["repo-db"],
+          downstreamNodes: [],
+        },
+      ],
+    };
   },
 };

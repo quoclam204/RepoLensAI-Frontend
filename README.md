@@ -36,7 +36,13 @@ Person 4. It does not import or modify source code from `RepoLensAI-Backend`.
 - Typed adapters for endpoint, database, file, content and symbol API contracts.
 - Loading, empty and error states for each explorer.
 
-Chat remains a placeholder for its scheduled Friday implementation.
+## Friday implementation
+
+- Evidence-grounded repository chat with in-session conversation history.
+- Confidence badges and expandable source references for every supported answer.
+- Suggested questions, input validation, pending, error, retry and clear states.
+- Typed `POST /api/analyses/{id}/chat` adapter with clearly labelled demo responses
+  while the backend chat endpoint is unavailable.
 
 ## Local setup
 

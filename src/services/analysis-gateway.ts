@@ -3,12 +3,15 @@ import { hasBackendConfiguration } from "@/services/api-client";
 import { mockAnalysisAdapter } from "@/services/mock-analysis-adapter";
 import type {
   ArchitectureResponse,
+  ArchifyV3Document,
+  ArchitectureTraceResponse,
   DependencyItem,
   EndpointQuery,
   FileQuery,
   RepositorySubmission,
   VisualGraph,
 } from "@/types/api";
+
 
 const forceMock = process.env.NEXT_PUBLIC_DATA_SOURCE === "mock";
 export const usesMockAnalysis = forceMock || !hasBackendConfiguration();
@@ -30,11 +33,63 @@ export const analysisGateway = {
       ? mockAnalysisAdapter.overview(analysisId)
       : analysisApi.overview(analysisId);
   },
+  classification(analysisId: string) {
+    return usesMockAnalysis
+      ? mockAnalysisAdapter.classification()
+      : analysisApi.classification(analysisId);
+  },
+  diagram(analysisId: string, diagramType?: string) {
+    return usesMockAnalysis
+      ? mockAnalysisAdapter.diagram(diagramType)
+      : analysisApi.diagram(analysisId, diagramType);
+  },
   async architecture(analysisId: string): Promise<VisualGraph> {
     if (usesMockAnalysis) return mockAnalysisAdapter.architecture();
     return normalizeArchitecture(await analysisApi.architecture(analysisId));
   },
+  async archifyV3(analysisId: string): Promise<ArchifyV3Document> {
+    if (usesMockAnalysis) {
+      const graph = await mockAnalysisAdapter.architecture();
+      return {
+        schema_version: 1,
+        diagram_type: "architecture",
+        meta: { title: "RepoLens Architecture", subtitle: "Mock Analysis" },
+        components: graph.nodes.map((n) => ({
+          id: n.id,
+          type: n.kind || "runtime",
+          label: n.label,
+          category: "runtime",
+        })),
+        boundaries: [],
+        connections: graph.edges.map((e) => ({
+          id: e.id,
+          from: e.source,
+          to: e.target,
+          label: e.relationship,
+        })),
+      };
+    }
+    return analysisApi.archifyV3(analysisId);
+  },
+  async traceRoute(analysisId: string, from: string, to: string): Promise<ArchitectureTraceResponse> {
+    if (usesMockAnalysis) {
+      return {
+        analysisId,
+        fromNodeId: from,
+        toNodeId: to,
+        found: false,
+        pathNodes: [],
+        pathEdges: [],
+        evidences: [],
+      };
+    }
+    return analysisApi.traceRoute(analysisId, from, to);
+  },
+  exportArchifyHtmlUrl(analysisId: string, theme = "dark") {
+    return analysisApi.exportArchifyHtmlUrl(analysisId, theme);
+  },
   async dependencies(analysisId: string): Promise<VisualGraph> {
+
     if (usesMockAnalysis) return mockAnalysisAdapter.dependencies();
 
     const firstPage = await analysisApi.dependencies(analysisId);
@@ -87,6 +142,11 @@ export const analysisGateway = {
     return usesMockAnalysis
       ? mockAnalysisAdapter.symbolDetail(symbolId)
       : analysisApi.symbolDetail(analysisId, symbolId);
+  },
+  chat(analysisId: string, question: string) {
+    return usesMockAnalysis
+      ? mockAnalysisAdapter.chat({ question })
+      : analysisApi.chat(analysisId, { question });
   },
 };
 

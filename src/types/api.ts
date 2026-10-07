@@ -364,10 +364,11 @@ export interface DiagramDetailCardDto {
   nodeId: string;
   title: string;
   role: string;
-  filePath: string;
+  filePath?: string | null;
   symbol?: string | null;
   lineRange?: string | null;
   description?: string | null;
+  summary?: string | null;
   upstreamNodes: string[];
   downstreamNodes: string[];
 }

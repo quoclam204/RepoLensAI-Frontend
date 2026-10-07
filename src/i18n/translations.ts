@@ -112,8 +112,20 @@ export const translations = {
     "diagram.statusBadge": "TRẠNG THÁI: CHƯA PHÁT HIỆN THÀNH PHẦN",
 
     // Footer
-    "footer.brand": "RepoLens AI frontend • Kiến trúc phần mềm thông minh đa ngôn ngữ",
+    "footer.brand": "RepoLens AI",
+    "footer.tagline": "Nền tảng phân tích mã nguồn và trực quan hóa kiến trúc hệ thống chuyên sâu với AI.",
+    "footer.product": "Sản phẩm",
+    "footer.navAnalyze": "Phân tích Repository",
+    "footer.navWorkspace": "Không gian làm việc",
+    "footer.navArchitecture": "Sơ đồ kiến trúc",
+    "footer.capabilities": "Khả năng phân tích",
+    "footer.capPolyglot": "Đa ngôn ngữ: .NET, Java, Python, Go",
+    "footer.capArchitecture": "Clean Architecture & CQRS",
+    "footer.capDiagrams": "Phân tích phụ thuộc & luồng dữ liệu",
+    "footer.systemStatus": "Archify Engine v3 • Sẵn sàng",
+    "footer.rights": "Bảo lưu mọi quyền.",
     "footer.themeStatus": "Hỗ trợ Giao diện Sáng & Tối • Đa ngôn ngữ VI / EN",
+    "footer.backToTop": "Lên đầu trang",
   },
   en: {
     // Header & Nav
@@ -226,8 +238,20 @@ export const translations = {
     "diagram.statusBadge": "STATUS: COMPONENT NOT DETECTED",
 
     // Footer
-    "footer.brand": "RepoLens AI frontend • Intelligent Software Architecture",
+    "footer.brand": "RepoLens AI",
+    "footer.tagline": "AI-grounded repository intelligence & software architecture visualization engine.",
+    "footer.product": "Product",
+    "footer.navAnalyze": "Analyze Repository",
+    "footer.navWorkspace": "Workspace",
+    "footer.navArchitecture": "Architecture Graph",
+    "footer.capabilities": "Capabilities",
+    "footer.capPolyglot": "Polyglot: .NET, Java, Python, Go",
+    "footer.capArchitecture": "Clean Architecture & CQRS",
+    "footer.capDiagrams": "Dependency & Flow Insights",
+    "footer.systemStatus": "Archify Engine v3 • Operational",
+    "footer.rights": "All rights reserved.",
     "footer.themeStatus": "Light & Dark Mode Enabled • Bilingual VI / EN",
+    "footer.backToTop": "Back to top",
   },
 } as const;
 

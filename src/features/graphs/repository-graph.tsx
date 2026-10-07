@@ -2,6 +2,7 @@
 
 import {
   Background,
+  BackgroundVariant,
   Controls,
   Handle,
   MarkerType,
@@ -28,6 +29,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { analysisGateway } from "@/services/analysis-gateway";
 import { useTheme } from "@/components/theme-provider";
+import { useLanguage } from "@/i18n/language-context";
 import {
   RepoLensIcon,
   SunIcon,
@@ -48,6 +50,15 @@ import {
   RouterNodeIcon,
   GridNodeIcon,
   UserNodeIcon,
+  PackageIcon,
+  AlertTriangleIcon,
+  SearchIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
+  CloseIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ExternalLinkIcon,
 } from "@/components/icons";
 import type {
   VisualGraph,
@@ -72,8 +83,8 @@ export interface ArchifyCustomNodeData extends Record<string, unknown> {
   subtitle?: string;
   extraText?: string;
   tag?: string;
-  iconType: "window" | "external" | "code" | "shield" | "menu" | "cloud" | "db" | "grid";
-  category: "ui" | "runtime" | "policy" | "data" | "external";
+  iconType: "window" | "external" | "code" | "shield" | "menu" | "cloud" | "db" | "grid" | "package";
+  category: "ui" | "runtime" | "policy" | "data" | "cloud" | "bus" | "external";
   theme: "dark" | "light";
   isSelected?: boolean;
   isConnected?: boolean;
@@ -88,7 +99,7 @@ export interface ArchifyCustomNodeData extends Record<string, unknown> {
 export interface BoundaryBoxData extends Record<string, unknown> {
   id: string;
   label: string;
-  category: "ui" | "runtime" | "policy" | "data" | "external";
+  category: "ui" | "runtime" | "policy" | "data" | "cloud" | "bus" | "external";
   width: number;
   height: number;
   theme: "dark" | "light";
@@ -109,58 +120,86 @@ type FlowNode = ArchifyNode | BoundaryNode | StageNode;
 // Rich color palettes for Light & Dark mode matching Archify design system
 const CATEGORY_STYLES = {
   dark: {
+    // 1. FRONTEND: Client apps, browsers, mobile, UI -> Sky / Cyan
     ui: {
-      border: "#00f0ff",
-      glow: "rgba(0, 240, 255, 0.45)",
-      bg: "#091728",
-      text: "#e0f7fe",
+      border: "#38bdf8",
+      glow: "rgba(56, 189, 248, 0.45)",
+      bg: "#08192c",
+      text: "#f0f9ff",
       subtext: "#38bdf8",
-      laneBorder: "rgba(0, 240, 255, 0.4)",
-      laneBg: "rgba(0, 240, 255, 0.015)",
+      laneBorder: "rgba(56, 189, 248, 0.4)",
+      laneBg: "rgba(56, 189, 248, 0.02)",
       laneText: "#38bdf8",
     },
+    // 2. BACKEND: Services, APIs, workers, daemons -> Emerald / Mint Green
     runtime: {
       border: "#2dd4bf",
       glow: "rgba(45, 212, 191, 0.45)",
-      bg: "#081a1f",
-      text: "#ccfbf1",
+      bg: "#061a16",
+      text: "#f0fdf4",
       subtext: "#2dd4bf",
       laneBorder: "rgba(45, 212, 191, 0.4)",
-      laneBg: "rgba(45, 212, 191, 0.015)",
+      laneBg: "rgba(45, 212, 191, 0.02)",
       laneText: "#2dd4bf",
     },
-    policy: {
-      border: "#f43f5e",
-      glow: "rgba(244, 63, 94, 0.45)",
-      bg: "#200d18",
-      text: "#ffe4e6",
-      subtext: "#fb7185",
-      laneBorder: "rgba(244, 63, 94, 0.45)",
-      laneBg: "rgba(244, 63, 94, 0.018)",
-      laneText: "#fb7185",
-    },
+    // 3. DATABASE: DBs, caches, stores, AI/ML -> Purple / Lavender
     data: {
-      border: "#a855f7",
-      glow: "rgba(168, 85, 247, 0.45)",
+      border: "#c084fc",
+      glow: "rgba(192, 132, 252, 0.45)",
       bg: "#160e28",
-      text: "#f3e8ff",
+      text: "#faf5ff",
       subtext: "#c084fc",
-      laneBorder: "rgba(168, 85, 247, 0.4)",
-      laneBg: "rgba(168, 85, 247, 0.015)",
+      laneBorder: "rgba(192, 132, 252, 0.4)",
+      laneBg: "rgba(192, 132, 252, 0.02)",
       laneText: "#c084fc",
     },
-    external: {
-      border: "#f97316",
-      glow: "rgba(249, 115, 22, 0.45)",
-      bg: "#211309",
-      text: "#ffedd5",
+    // 4. CLOUD: Managed services, CDN, infra -> Amber / Warm Gold
+    cloud: {
+      border: "#fbbf24",
+      glow: "rgba(251, 191, 36, 0.45)",
+      bg: "#201605",
+      text: "#fefce8",
+      subtext: "#fbbf24",
+      laneBorder: "rgba(251, 191, 36, 0.4)",
+      laneBg: "rgba(251, 191, 36, 0.02)",
+      laneText: "#fbbf24",
+    },
+    // 5. SECURITY: Auth, secrets, guards, rules -> Rose / Pink
+    policy: {
+      border: "#fb7185",
+      glow: "rgba(251, 113, 133, 0.45)",
+      bg: "#220c18",
+      text: "#fff1f2",
+      subtext: "#fb7185",
+      laneBorder: "rgba(251, 113, 133, 0.4)",
+      laneBg: "rgba(251, 113, 133, 0.02)",
+      laneText: "#fb7185",
+    },
+    // 6. MESSAGE BUS: Kafka, RabbitMQ, SNS, events -> Orange / Peach
+    bus: {
+      border: "#fb923c",
+      glow: "rgba(251, 146, 60, 0.45)",
+      bg: "#221106",
+      text: "#fff7ed",
       subtext: "#fb923c",
-      laneBorder: "rgba(249, 115, 22, 0.4)",
-      laneBg: "rgba(249, 115, 22, 0.015)",
+      laneBorder: "rgba(251, 146, 60, 0.4)",
+      laneBg: "rgba(251, 146, 60, 0.02)",
       laneText: "#fb923c",
+    },
+    // 7. EXTERNAL: Users, 3rd parties, generic -> Slate / Steel
+    external: {
+      border: "#94a3b8",
+      glow: "rgba(148, 163, 184, 0.35)",
+      bg: "#0f172a",
+      text: "#f8fafc",
+      subtext: "#94a3b8",
+      laneBorder: "rgba(148, 163, 184, 0.4)",
+      laneBg: "rgba(148, 163, 184, 0.02)",
+      laneText: "#94a3b8",
     },
   },
   light: {
+    // 1. FRONTEND: Client apps, browsers, mobile, UI -> Sky / Cyan
     ui: {
       border: "#0284c7",
       glow: "rgba(2, 132, 199, 0.28)",
@@ -168,9 +207,10 @@ const CATEGORY_STYLES = {
       text: "#0c4a6e",
       subtext: "#0284c7",
       laneBorder: "rgba(2, 132, 199, 0.45)",
-      laneBg: "rgba(2, 132, 199, 0.02)",
+      laneBg: "rgba(2, 132, 199, 0.025)",
       laneText: "#0284c7",
     },
+    // 2. BACKEND: Services, APIs, workers, daemons -> Emerald / Mint Green
     runtime: {
       border: "#059669",
       glow: "rgba(5, 150, 105, 0.28)",
@@ -178,9 +218,32 @@ const CATEGORY_STYLES = {
       text: "#064e3b",
       subtext: "#059669",
       laneBorder: "rgba(5, 150, 105, 0.45)",
-      laneBg: "rgba(5, 150, 105, 0.02)",
+      laneBg: "rgba(5, 150, 105, 0.025)",
       laneText: "#059669",
     },
+    // 3. DATABASE: DBs, caches, stores, AI/ML -> Purple / Lavender
+    data: {
+      border: "#7c3aed",
+      glow: "rgba(124, 58, 237, 0.28)",
+      bg: "#f5f3ff",
+      text: "#4c1d95",
+      subtext: "#7c3aed",
+      laneBorder: "rgba(124, 58, 237, 0.45)",
+      laneBg: "rgba(124, 58, 237, 0.025)",
+      laneText: "#7c3aed",
+    },
+    // 4. CLOUD: Managed services, CDN, infra -> Amber / Warm Gold
+    cloud: {
+      border: "#d97706",
+      glow: "rgba(217, 119, 6, 0.28)",
+      bg: "#fffbeb",
+      text: "#78350f",
+      subtext: "#d97706",
+      laneBorder: "rgba(217, 119, 6, 0.45)",
+      laneBg: "rgba(217, 119, 6, 0.025)",
+      laneText: "#d97706",
+    },
+    // 5. SECURITY: Auth, secrets, guards, rules -> Rose / Pink
     policy: {
       border: "#e11d48",
       glow: "rgba(225, 29, 72, 0.28)",
@@ -191,25 +254,27 @@ const CATEGORY_STYLES = {
       laneBg: "rgba(225, 29, 72, 0.025)",
       laneText: "#e11d48",
     },
-    data: {
-      border: "#7c3aed",
-      glow: "rgba(124, 58, 237, 0.28)",
-      bg: "#f5f3ff",
-      text: "#4c1d95",
-      subtext: "#7c3aed",
-      laneBorder: "rgba(124, 58, 237, 0.45)",
-      laneBg: "rgba(124, 58, 237, 0.02)",
-      laneText: "#7c3aed",
+    // 6. MESSAGE BUS: Kafka, RabbitMQ, SNS, events -> Orange / Peach
+    bus: {
+      border: "#ea580c",
+      glow: "rgba(234, 88, 12, 0.28)",
+      bg: "#fff7ed",
+      text: "#7c2d12",
+      subtext: "#ea580c",
+      laneBorder: "rgba(234, 88, 12, 0.45)",
+      laneBg: "rgba(234, 88, 12, 0.025)",
+      laneText: "#ea580c",
     },
+    // 7. EXTERNAL: Users, 3rd parties, generic -> Slate / Steel
     external: {
-      border: "#d97706",
-      glow: "rgba(217, 119, 6, 0.28)",
-      bg: "#fffbeb",
-      text: "#78350f",
-      subtext: "#d97706",
-      laneBorder: "rgba(217, 119, 6, 0.45)",
-      laneBg: "rgba(217, 119, 6, 0.02)",
-      laneText: "#d97706",
+      border: "#475569",
+      glow: "rgba(71, 85, 105, 0.22)",
+      bg: "#f8fafc",
+      text: "#1e293b",
+      subtext: "#475569",
+      laneBorder: "rgba(71, 85, 105, 0.45)",
+      laneBg: "rgba(71, 85, 105, 0.025)",
+      laneText: "#475569",
     },
   },
 };
@@ -239,6 +304,8 @@ function RenderArchifyIcon({
       return <GridNodeIcon size={size} color="currentColor" />;
     case "external":
       return <UserNodeIcon size={size} color="currentColor" />;
+    case "package":
+      return <PackageIcon size={size} color="currentColor" />;
     default:
       return <RepoLensIcon size={size} color="currentColor" />;
   }
@@ -785,6 +852,128 @@ function buildAgentToolCallWorkflow(theme: "dark" | "light"): { nodes: FlowNode[
   return { nodes, edges };
 }
 
+// Map components to the 7 Design System roles:
+// 1. FRONTEND: Client apps, browsers, mobile, UI (Cyan / Sky)
+// 2. BACKEND: Services, APIs, workers, daemons (Emerald / Mint)
+// 3. DATABASE: DBs, caches, stores, AI/ML (Purple / Lavender)
+// 4. CLOUD: Managed services, CDN, infra (Amber / Gold)
+// 5. SECURITY: Auth, secrets, guards, rules (Rose / Pink)
+// 6. MESSAGE BUS: Kafka, RabbitMQ, SNS, events (Orange / Peach)
+// 7. EXTERNAL: Users, 3rd parties, generic (Slate / Steel)
+export function resolveNodeCategory(
+  role: string = "",
+  kind: string = "",
+  fallback: ArchifyCustomNodeData["category"] = "runtime",
+): ArchifyCustomNodeData["category"] {
+  const combined = `${role} ${kind}`.toLowerCase();
+
+  // 1. SECURITY (Auth Provider, OAuth, Guard, Token, Rule) -> Rose
+  if (
+    combined.includes("auth") ||
+    combined.includes("guard") ||
+    combined.includes("security") ||
+    combined.includes("policy") ||
+    combined.includes("token") ||
+    combined.includes("jwt") ||
+    combined.includes("rule") ||
+    combined.includes("shield")
+  ) {
+    return "policy";
+  }
+
+  // 2. MESSAGE BUS (Kafka, RabbitMQ, SNS, Event streams, Queue, Topic) -> Orange
+  if (
+    combined.includes("kafka") ||
+    combined.includes("rabbit") ||
+    combined.includes("queue") ||
+    combined.includes("topic") ||
+    combined.includes("bus") ||
+    combined.includes("event") ||
+    combined.includes("sns") ||
+    combined.includes("sqs") ||
+    combined.includes("broker")
+  ) {
+    return "bus";
+  }
+
+  // 3. CLOUD (CDN, CloudFront, S3, Infra, Managed Storage, Gateway) -> Amber
+  if (
+    combined.includes("cloud") ||
+    combined.includes("cdn") ||
+    combined.includes("cloudfront") ||
+    combined.includes("s3") ||
+    combined.includes("infra") ||
+    combined.includes("storage") ||
+    combined.includes("blob") ||
+    combined.includes("bucket")
+  ) {
+    return "cloud";
+  }
+
+  // 4. DATABASE (Postgres, Mongo, Redis, Repository, Entity, DB) -> Purple
+  if (
+    combined.includes("db") ||
+    combined.includes("database") ||
+    combined.includes("postgres") ||
+    combined.includes("sql") ||
+    combined.includes("mongo") ||
+    combined.includes("redis") ||
+    combined.includes("repository") ||
+    combined.includes("cache") ||
+    combined.includes("entity") ||
+    combined.includes("table") ||
+    combined.includes("schema") ||
+    combined.includes("dao")
+  ) {
+    return "data";
+  }
+
+  // 5. EXTERNAL (Users, 3rd parties, Browser, Mobile) -> Slate
+  if (
+    combined.includes("user") ||
+    combined.includes("browser") ||
+    combined.includes("external") ||
+    combined.includes("3rdparty") ||
+    combined.includes("thirdparty") ||
+    combined.includes("vendor")
+  ) {
+    return "external";
+  }
+
+  // 6. FRONTEND (Web App, Client SPA, React, Route, Page, View, Component, UI) -> Cyan
+  if (
+    combined.includes("ui") ||
+    combined.includes("frontend") ||
+    combined.includes("page") ||
+    combined.includes("route") ||
+    combined.includes("spa") ||
+    combined.includes("react") ||
+    combined.includes("vue") ||
+    combined.includes("component") ||
+    combined.includes("view") ||
+    combined.includes("client")
+  ) {
+    return "ui";
+  }
+
+  // 7. BACKEND (API Server, Controller, Service, Worker, Fastify, Backend) -> Emerald
+  if (
+    combined.includes("controller") ||
+    combined.includes("service") ||
+    combined.includes("api") ||
+    combined.includes("server") ||
+    combined.includes("backend") ||
+    combined.includes("worker") ||
+    combined.includes("handler") ||
+    combined.includes("fastify") ||
+    combined.includes("daemon")
+  ) {
+    return "runtime";
+  }
+
+  return fallback;
+}
+
 // Map typed DiagramDto from backend directly into Archify lanes cleanly
 // Fully grounded: does not fabricate nodes/edges; respects NotDetected / Unsupported status.
 export function buildFromDiagramDto(
@@ -927,7 +1116,7 @@ export function buildFromDiagramDto(
         const roleLower = (comp.role || "").toLowerCase();
         const kindLower = (comp.kind || "").toLowerCase();
 
-        if (kindLower === "project" || roleLower === "project") nodeIcon = "cloud";
+        if (kindLower === "project" || roleLower === "project" || kindLower === "package") nodeIcon = "package";
         else if (kindLower === "controller" || roleLower === "controller") nodeIcon = "window";
         else if (kindLower === "database" || roleLower === "database") nodeIcon = "db";
         else if (kindLower === "repository" || roleLower === "repository") nodeIcon = "grid";
@@ -952,7 +1141,7 @@ export function buildFromDiagramDto(
             subtitle: comp.role || comp.kind,
             extraText: lineRange,
             iconType: nodeIcon,
-            category,
+            category: resolveNodeCategory(comp.role, comp.kind, category),
             theme,
             path: filePath,
             childDiagramType: comp.childDiagramType,
@@ -1002,16 +1191,9 @@ export function buildFromDiagramDto(
     let sourceHandle = "r";
     let targetHandle = "l";
     if (sPos && tPos) {
-      if (tPos.y > sPos.y + 60) {
-        sourceHandle = "b";
-        targetHandle = "t";
-      } else if (sPos.y > tPos.y + 60) {
-        sourceHandle = "t";
-        targetHandle = "b";
-      } else if (sPos.x > tPos.x + 80) {
-        sourceHandle = "l";
-        targetHandle = "r";
-      }
+      const handles = getOptimalHandles(sPos, tPos);
+      sourceHandle = handles.sourceHandle;
+      targetHandle = handles.targetHandle;
     }
 
     const edgeColor = isDark ? "#00f0ff" : "#0284c7";
@@ -1333,7 +1515,7 @@ function buildLiveRepoArchifyGraph(
           comp.label.toLowerCase().includes("google");
 
         let nodeIcon: ArchifyCustomNodeData["iconType"] = icon;
-        if (isProject) nodeIcon = "cloud";
+        if (isProject) nodeIcon = "package";
         else if (isController) nodeIcon = "window";
         else if (isDb) nodeIcon = "db";
         else if (isGuard) nodeIcon = "shield";
@@ -1573,6 +1755,7 @@ function ArchifyGraphCanvas({
   const reactFlow = useReactFlow();
   const workspaceRef = useRef<HTMLDivElement>(null);
   const { theme, toggleTheme } = useTheme();
+  const { t, language } = useLanguage();
 
   // Selected Workflow Tab (defaults to "05-repo" if analysisId is provided)
   const [activeTab, setActiveTab] = useState<WorkflowPresetKey>(analysisId ? "05-repo" : "01-agent");
@@ -1592,8 +1775,8 @@ function ArchifyGraphCanvas({
   // Signal Flow Trace Direction: "none" | "upstream" | "downstream"
   const [traceDirection, setTraceDirection] = useState<"none" | "upstream" | "downstream">("none");
 
-  // Semantic Lens: "all" | "ui" | "runtime" | "policy" | "data" | "external"
-  const [activeLens, setActiveLens] = useState<"all" | "ui" | "runtime" | "policy" | "data" | "external">("all");
+  // Semantic Lens: "all" | "ui" | "runtime" | "policy" | "data" | "cloud" | "bus" | "external"
+  const [activeLens, setActiveLens] = useState<"all" | "ui" | "runtime" | "policy" | "data" | "cloud" | "bus" | "external">("all");
 
   // Route Probing (Path Finding A -> B)
   const [routeStartId, setRouteStartId] = useState<string | null>(null);
@@ -1668,8 +1851,12 @@ function ArchifyGraphCanvas({
         .catch(() => {});
 
       // Fetch typed diagram from backend
+      const targetDiagramType = kind === "dependencies"
+        ? "dependencies"
+        : (activeDiagramType === "default" ? undefined : activeDiagramType);
+
       analysisGateway
-        .diagram(analysisId, activeDiagramType === "default" ? undefined : activeDiagramType)
+        .diagram(analysisId, targetDiagramType)
         .then((diagram) => {
           setDiagramDto(diagram);
           if (diagram.availableDiagramTypes && diagram.availableDiagramTypes.length > 0) {
@@ -2148,10 +2335,20 @@ function ArchifyGraphCanvas({
 
   const isDark = theme === "dark";
 
-  // Tab definitions: strictly show only repository architecture when viewing an analyzed repo
+  const isDependenciesView = kind === "dependencies";
+
+  // Tab definitions: strictly show only repository architecture/dependencies when viewing an analyzed repo
   const tabs: { key: WorkflowPresetKey; label: string; file: string }[] = [];
   if (analysisId) {
-    tabs.push({ key: "05-repo", label: "Live Architecture", file: `repo-${analysisId}.architecture.html` });
+    tabs.push({
+      key: "05-repo",
+      label: isDependenciesView
+        ? (language === "vi" ? "Sơ đồ Phụ thuộc" : "Dependencies Graph")
+        : (language === "vi" ? "Kiến trúc Hệ thống" : "Live Architecture"),
+      file: isDependenciesView
+        ? `repo-${analysisId}.dependencies.html`
+        : `repo-${analysisId}.architecture.html`,
+    });
   } else {
     tabs.push(
       { key: "01-agent", label: "01 Agent Tool Call", file: "agent-tool-call.workflow.html" },
@@ -2169,11 +2366,11 @@ function ArchifyGraphCanvas({
       style={{
         width: "100%",
         minHeight: isFullscreen ? "100vh" : "800px",
-        background: isDark ? "#060b14" : "#f1f5f9",
+        background: "transparent",
         color: isDark ? "#f8fafc" : "#0f172a",
-        padding: isFullscreen ? "0" : "16px 0",
+        padding: isFullscreen ? "0" : "12px 0 48px",
         fontFamily: "'JetBrains Mono', 'Fira Code', 'Space Mono', Consolas, monospace",
-        transition: "background 0.3s ease, color 0.3s ease",
+        transition: "color 0.3s ease",
       }}
     >
       <div className="page-shell" style={{ maxWidth: 1320, margin: "0 auto", padding: "0 12px" }}>
@@ -2233,18 +2430,18 @@ function ArchifyGraphCanvas({
                         fontWeight: isActive ? 750 : 600,
                         borderRadius: "7px",
                         border: isActive
-                          ? `1px solid ${isDark ? "rgba(0, 240, 255, 0.5)" : "rgba(2, 132, 199, 0.5)"}`
+                          ? `1px solid ${isDark ? "rgba(0, 245, 212, 0.5)" : "rgba(11, 143, 104, 0.45)"}`
                           : "1px solid transparent",
                         cursor: "pointer",
                         background: isActive
                           ? isDark
-                            ? "rgba(0, 240, 255, 0.12)"
-                            : "#e0f2fe"
+                            ? "rgba(0, 245, 212, 0.14)"
+                            : "#e6f7f0"
                           : "transparent",
                         color: isActive
                           ? isDark
-                            ? "#00f0ff"
-                            : "#0284c7"
+                            ? "#00f5d4"
+                            : "#065e44"
                           : isDark
                             ? "#94a3b8"
                             : "#64748b",
@@ -2254,7 +2451,13 @@ function ArchifyGraphCanvas({
                         gap: "6px",
                       }}
                     >
-                      {tab.key === "05-repo" && <ArchitectureIcon size={13} color="currentColor" />}
+                      {tab.key === "05-repo" && (
+                        isDependenciesView ? (
+                          <PackageIcon size={13} color="currentColor" />
+                        ) : (
+                          <ArchitectureIcon size={13} color="currentColor" />
+                        )
+                      )}
                       {tab.label}
                     </button>
                   );
@@ -2277,15 +2480,16 @@ function ArchifyGraphCanvas({
                         fontWeight: 700,
                         display: "flex",
                         alignItems: "center",
-                        gap: "5px",
+                        gap: "6px",
                       }}
                     >
-                      <span>📦 {classification.type}</span>
+                      <PackageIcon size={13} color="currentColor" />
+                      <span>{classification.type}</span>
                       <span style={{ fontSize: "9.5px", opacity: 0.85 }}>({classification.confidence})</span>
                     </div>
                   )}
 
-                  {availableDiagramTypes.length > 1 && (
+                  {!isDependenciesView && availableDiagramTypes.length > 1 && (
                     <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
                       {availableDiagramTypes.map((dtype) => {
                         const isCurActive =
@@ -2309,21 +2513,21 @@ function ArchifyGraphCanvas({
                               border: `1px solid ${
                                 isCurActive
                                   ? isDark
-                                    ? "#00f0ff"
-                                    : "#0284c7"
+                                    ? "rgba(0, 245, 212, 0.5)"
+                                    : "rgba(11, 143, 104, 0.45)"
                                   : isDark
                                   ? "#334155"
                                   : "#cbd5e1"
                               }`,
                               background: isCurActive
                                 ? isDark
-                                  ? "rgba(0, 240, 255, 0.15)"
-                                  : "#e0f2fe"
+                                  ? "rgba(0, 245, 212, 0.14)"
+                                  : "#e6f7f0"
                                 : "transparent",
                               color: isCurActive
                                 ? isDark
-                                  ? "#00f0ff"
-                                  : "#0284c7"
+                                  ? "#00f5d4"
+                                  : "#065e44"
                                 : isDark
                                 ? "#94a3b8"
                                 : "#64748b",
@@ -2371,9 +2575,9 @@ function ArchifyGraphCanvas({
                 style={{
                   padding: "5px 10px",
                   borderRadius: "7px",
-                  border: `1px solid ${isTraceMotion ? (isDark ? "rgba(0, 240, 255, 0.4)" : "#0284c7") : isDark ? "#334155" : "#cbd5e1"}`,
-                  background: isTraceMotion ? (isDark ? "rgba(0, 240, 255, 0.1)" : "#e0f2fe") : "transparent",
-                  color: isTraceMotion ? (isDark ? "#00f0ff" : "#0284c7") : isDark ? "#94a3b8" : "#64748b",
+                  border: `1px solid ${isTraceMotion ? (isDark ? "rgba(0, 245, 212, 0.45)" : "rgba(11, 143, 104, 0.45)") : isDark ? "#334155" : "#cbd5e1"}`,
+                  background: isTraceMotion ? (isDark ? "rgba(0, 245, 212, 0.14)" : "#e6f7f0") : "transparent",
+                  color: isTraceMotion ? (isDark ? "#00f5d4" : "#065e44") : isDark ? "#94a3b8" : "#64748b",
                   fontSize: "11px",
                   fontWeight: 700,
                   cursor: "pointer",
@@ -2382,7 +2586,7 @@ function ArchifyGraphCanvas({
                   gap: "5px",
                 }}
               >
-                <BoltIcon size={12} color={isTraceMotion ? (isDark ? "#00f0ff" : "#0284c7") : "currentColor"} />
+                <BoltIcon size={12} color={isTraceMotion ? (isDark ? "#00f5d4" : "#065e44") : "currentColor"} />
                 <span>{isTraceMotion ? "Flow On" : "Flow Off"}</span>
               </button>
 
@@ -2394,9 +2598,9 @@ function ArchifyGraphCanvas({
                 style={{
                   padding: "5px 10px",
                   borderRadius: "7px",
-                  border: `1px solid ${isDark ? "rgba(56, 189, 248, 0.4)" : "#cbd5e1"}`,
-                  background: isDark ? "rgba(56, 189, 248, 0.1)" : "#f1f5f9",
-                  color: isDark ? "#38bdf8" : "#0284c7",
+                  border: `1px solid ${isDark ? "rgba(0, 245, 212, 0.3)" : "#cbd5e1"}`,
+                  background: isDark ? "rgba(0, 245, 212, 0.1)" : "#f1f5f9",
+                  color: isDark ? "#00f5d4" : "#065e44",
                   fontSize: "11px",
                   fontWeight: 700,
                   cursor: "pointer",
@@ -2405,7 +2609,7 @@ function ArchifyGraphCanvas({
                   gap: "5px",
                 }}
               >
-                {isDark ? <SunIcon size={12} color="#f59e0b" /> : <MoonIcon size={12} color="#0284c7" />}
+                {isDark ? <SunIcon size={12} color="#f59e0b" /> : <MoonIcon size={12} color="#065e44" />}
                 <span>{isDark ? "Light" : "Dark"}</span>
               </button>
 
@@ -2418,9 +2622,9 @@ function ArchifyGraphCanvas({
                   style={{
                     padding: "5px 11px",
                     borderRadius: "7px",
-                    border: `1px solid ${isDark ? "#00f0ff" : "#0284c7"}`,
-                    background: isDark ? "rgba(0, 240, 255, 0.12)" : "#e0f2fe",
-                    color: isDark ? "#00f0ff" : "#0284c7",
+                    border: `1px solid ${isDark ? "rgba(0, 245, 212, 0.45)" : "rgba(11, 143, 104, 0.45)"}`,
+                    background: isDark ? "rgba(0, 245, 212, 0.14)" : "#e6f7f0",
+                    color: isDark ? "#00f5d4" : "#065e44",
                     fontSize: "11px",
                     fontWeight: 700,
                     cursor: "pointer",
@@ -2430,7 +2634,7 @@ function ArchifyGraphCanvas({
                   }}
                 >
                   <span>Export HTML</span>
-                  <span>↗</span>
+                  <ExternalLinkIcon size={11} color="currentColor" />
                 </button>
               )}
 
@@ -2475,14 +2679,14 @@ function ArchifyGraphCanvas({
                 }}
               >
                 {isViewLocked ? <LockIcon size={12} /> : <UnlockIcon size={12} />}
-                <span>{isViewLocked ? "Cố định" : "Tự do"}</span>
+                <span>{isViewLocked ? (language === "vi" ? "Cố định" : "Locked") : (language === "vi" ? "Tự do" : "Unlocked")}</span>
               </button>
 
               {/* Inspector HUD Toggle Button */}
               <button
                 type="button"
                 onClick={() => setIsHudOpen(!isHudOpen)}
-                title="Bật / tắt bảng thông số chi tiết"
+                title={language === "vi" ? "Bật / tắt bảng thông số chi tiết" : "Toggle inspector HUD panel"}
                 style={{
                   padding: "5px 10px",
                   borderRadius: "7px",
@@ -2498,7 +2702,7 @@ function ArchifyGraphCanvas({
                 }}
               >
                 <BoltIcon size={12} color={isDark ? "#f97316" : "#ea580c"} />
-                <span>Inspector</span>
+                <span>{language === "vi" ? "Chi tiết" : "Inspector"}</span>
                 <span style={{ fontSize: "10px" }}>{isHudOpen ? "▴" : "▾"}</span>
               </button>
 
@@ -2648,7 +2852,16 @@ function ArchifyGraphCanvas({
                 />
               )}
 
-              <Controls showInteractive={!isViewLocked} />
+              <Controls
+                showInteractive={!isViewLocked}
+                className={isDark ? "archify-controls-dark" : "archify-controls-light"}
+                style={{
+                  bottom: isHudOpen ? 18 : 60,
+                  left: isHudOpen ? 376 : 16,
+                  transition: "bottom 0.25s ease, left 0.25s ease",
+                  zIndex: 25,
+                }}
+              />
             </ReactFlow>
 
             {/* Alert banner when status is NotDetected (e.g. Không phát hiện database) or Unsupported */}
@@ -2661,62 +2874,121 @@ function ArchifyGraphCanvas({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  backdropFilter: "blur(6px)",
-                  background: isDark ? "rgba(7, 13, 24, 0.78)" : "rgba(248, 250, 252, 0.78)",
+                  backdropFilter: "blur(5px)",
+                  background: isDark ? "rgba(9, 16, 29, 0.72)" : "rgba(241, 245, 249, 0.55)",
                   padding: "20px",
                 }}
               >
                 <div
                   style={{
-                    maxWidth: 480,
-                    width: "100%",
-                    padding: "26px 28px",
+                    maxWidth: 460,
+                    width: "92%",
+                    padding: "32px 28px",
                     borderRadius: "16px",
-                    border: `1.5px solid ${
-                      diagramDto.status === "NotDetected"
-                        ? isDark
-                          ? "rgba(245, 158, 11, 0.45)"
-                          : "#f59e0b"
-                        : isDark
-                        ? "rgba(239, 68, 68, 0.45)"
-                        : "#ef4444"
-                    }`,
-                    background: isDark ? "#091424" : "#ffffff",
+                    background: isDark ? "#09141f" : "#ffffff",
+                    border: isDark ? "1px solid #1e293b" : "1px solid #e2e8f0",
+                    borderTop: isDark ? "3px solid #00f5d4" : "3px solid #0b8f68",
                     boxShadow: isDark
-                      ? "0 25px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(245, 158, 11, 0.1)"
-                      : "0 20px 45px rgba(15, 23, 42, 0.12)",
+                      ? "0 25px 60px -15px rgba(0, 0, 0, 0.75), 0 0 25px rgba(0, 245, 212, 0.1)"
+                      : "0 20px 45px -10px rgba(11, 143, 104, 0.1), 0 0 0 1px rgba(15, 23, 42, 0.04)",
                     textAlign: "center",
-                    fontFamily: "'JetBrains Mono', Consolas, monospace",
                   }}
                 >
-                  <div style={{ fontSize: "38px", marginBottom: "12px" }}>
-                    {diagramDto.status === "NotDetected" ? "🔍" : "⚠️"}
+                  {/* Engineering Status Pill */}
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "4px 10px",
+                      borderRadius: "999px",
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      letterSpacing: "0.5px",
+                      textTransform: "uppercase",
+                      fontFamily: "'JetBrains Mono', Consolas, monospace",
+                      background: isDark ? "rgba(0, 245, 212, 0.12)" : "#e6f7f0",
+                      color: isDark ? "#00f5d4" : "#065e44",
+                      border: `1px solid ${isDark ? "rgba(0, 245, 212, 0.3)" : "rgba(11, 143, 104, 0.28)"}`,
+                      marginBottom: "16px",
+                    }}
+                  >
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: isDark ? "#00f5d4" : "#0b8f68" }} />
+                    <span>{t("diagram.statusBadge")}</span>
                   </div>
+
+                  {/* Icon Badge */}
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      margin: "0 auto 16px",
+                      borderRadius: "14px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: isDark ? "rgba(0, 245, 212, 0.1)" : "#e6f7f0",
+                      border: `1px solid ${isDark ? "rgba(0, 245, 212, 0.25)" : "rgba(11, 143, 104, 0.25)"}`,
+                      color: isDark ? "#00f5d4" : "#0b8f68",
+                    }}
+                  >
+                    {diagramDto.status === "NotDetected" ? (
+                      <SearchIcon size={22} color="currentColor" />
+                    ) : (
+                      <AlertTriangleIcon size={22} color="currentColor" />
+                    )}
+                  </div>
+
+                  {/* Title */}
                   <h3
                     style={{
                       margin: "0 0 10px",
                       fontSize: "16px",
-                      fontWeight: 800,
+                      fontWeight: 750,
                       color: isDark ? "#f8fafc" : "#0f172a",
+                      fontFamily: "'Plus Jakarta Sans', var(--font-sans), sans-serif",
+                      letterSpacing: "-0.2px",
                     }}
                   >
                     {diagramDto.status === "NotDetected"
-                      ? "Không phát hiện thành phần tương ứng"
-                      : "Loại Repository không hỗ trợ sơ đồ này"}
+                      ? t("diagram.notDetectedTitle")
+                      : t("diagram.unsupportedTitle")}
                   </h3>
+
+                  {/* Description */}
                   <p
                     style={{
-                      margin: "0 0 18px",
+                      margin: "0 auto 22px",
+                      maxWidth: 380,
                       fontSize: "12px",
-                      color: isDark ? "#94a3b8" : "#475569",
+                      color: isDark ? "#94a3b8" : "#64748b",
                       lineHeight: 1.6,
+                      fontFamily: "'JetBrains Mono', Consolas, monospace",
                     }}
                   >
-                    {diagramDto.message ||
-                      (diagramDto.status === "NotDetected"
-                        ? "Không phát hiện mã nguồn hoặc cấu hình liên quan trong repository này (ví dụ: không có DbContext để vẽ sơ đồ ERD)."
-                        : "Cấu trúc mã nguồn của repository chưa tương thích với sơ đồ đã chọn.")}
+                    {(() => {
+                      if (language === "en") {
+                        if (
+                          diagramDto.message &&
+                          (diagramDto.message.toLowerCase().includes("database") ||
+                            diagramDto.message.toLowerCase().includes("dbcontext"))
+                        ) {
+                          return t("diagram.noDatabaseDesc");
+                        }
+                        return diagramDto.status === "NotDetected"
+                          ? t("diagram.notDetectedDefaultDesc")
+                          : t("diagram.unsupportedDesc");
+                      }
+                      return (
+                        diagramDto.message ||
+                        (diagramDto.status === "NotDetected"
+                          ? t("diagram.notDetectedDefaultDesc")
+                          : t("diagram.unsupportedDesc"))
+                      );
+                    })()}
                   </p>
+
+                  {/* Back to main diagram button */}
                   {availableDiagramTypes.length > 0 && (
                     <button
                       type="button"
@@ -2724,17 +2996,28 @@ function ArchifyGraphCanvas({
                         setActiveDiagramType(availableDiagramTypes[0]);
                       }}
                       style={{
-                        padding: "8px 18px",
-                        borderRadius: "8px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "7px",
+                        padding: "9px 20px",
+                        borderRadius: "10px",
                         border: "none",
-                        background: isDark ? "#00f0ff" : "#0284c7",
-                        color: isDark ? "#08111e" : "#ffffff",
+                        background: isDark
+                          ? "linear-gradient(135deg, #00f5d4 0%, #00d2b4 100%)"
+                          : "linear-gradient(135deg, #0e8561 0%, #066045 100%)",
+                        color: isDark ? "#041410" : "#ffffff",
                         fontSize: "12px",
-                        fontWeight: 750,
+                        fontWeight: 700,
                         cursor: "pointer",
+                        boxShadow: isDark
+                          ? "0 4px 18px rgba(0, 245, 212, 0.35)"
+                          : "0 4px 16px rgba(11, 143, 104, 0.28)",
+                        transition: "all 0.18s ease",
                       }}
                     >
-                      ← Quay lại sơ đồ chính ({availableDiagramTypes[0]})
+                      <ArrowLeftIcon size={12} color="currentColor" />
+                      <span>{t("diagram.backToMain")}</span>
+                      <span style={{ opacity: 0.9, textTransform: "capitalize" }}>({availableDiagramTypes[0]})</span>
                     </button>
                   )}
                 </div>
@@ -2746,18 +3029,18 @@ function ArchifyGraphCanvas({
               <button
                 type="button"
                 onClick={() => setIsHudOpen(true)}
-                title="Mở bảng thông số và công cụ chi tiết"
+                title={language === "vi" ? "Mở bảng thông số và công cụ chi tiết" : "Open details & tools inspector panel"}
                 style={{
                   position: "absolute",
                   bottom: 16,
                   left: 16,
                   padding: "6px 14px",
                   borderRadius: "20px",
-                  background: isDark ? "rgba(9, 16, 29, 0.9)" : "rgba(255, 255, 255, 0.94)",
+                  background: isDark ? "rgba(9, 16, 29, 0.9)" : "#ffffff",
                   backdropFilter: "blur(12px)",
-                  border: `1px solid ${isDark ? "rgba(0, 240, 255, 0.35)" : "rgba(2, 132, 199, 0.35)"}`,
-                  boxShadow: "0 6px 20px rgba(0,0,0,0.2)",
-                  color: isDark ? "#00f0ff" : "#0284c7",
+                  border: `1px solid ${isDark ? "rgba(0, 245, 212, 0.4)" : "rgba(11, 143, 104, 0.4)"}`,
+                  boxShadow: "0 6px 20px rgba(0,0,0,0.12)",
+                  color: isDark ? "#00f5d4" : "#065e44",
                   fontSize: "11px",
                   fontWeight: 700,
                   display: "flex",
@@ -2767,10 +3050,13 @@ function ArchifyGraphCanvas({
                   zIndex: 35,
                 }}
               >
-                <BoltIcon size={13} color={isDark ? "#00f0ff" : "#0284c7"} />
-                <span>Chi tiết & Công cụ</span>
+                <BoltIcon size={13} color={isDark ? "#00f5d4" : "#0b8f68"} />
+                <span>{t("graph.detailsAndTools")}</span>
                 <span style={{ fontSize: "10px", color: isDark ? "#94a3b8" : "#64748b" }}>({hudTab})</span>
-                <span style={{ fontSize: "9px" }}>▲ Mở</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", fontSize: "10px" }}>
+                  <ChevronUpIcon size={11} color="currentColor" />
+                  <span>{t("graph.open")}</span>
+                </span>
               </button>
             )}
 
@@ -2786,12 +3072,12 @@ function ArchifyGraphCanvas({
                   overflowY: "auto",
                   background: isDark ? "rgba(9, 16, 29, 0.96)" : "rgba(255, 255, 255, 0.96)",
                   backdropFilter: "blur(18px)",
-                  border: `1.5px solid ${isDark ? "rgba(0, 240, 255, 0.35)" : "rgba(2, 132, 199, 0.35)"}`,
+                  border: `1px solid ${isDark ? "#1e293b" : "#e2e8f0"}`,
                   borderRadius: "14px",
                   padding: "16px 18px",
                   boxShadow: isDark
-                    ? "0 25px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 240, 255, 0.15)"
-                    : "0 20px 45px rgba(15, 23, 42, 0.15)",
+                    ? "0 25px 60px rgba(0, 0, 0, 0.8), 0 0 25px rgba(0, 245, 212, 0.08)"
+                    : "0 20px 45px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.03)",
                   zIndex: 40,
                   fontFamily: "'JetBrains Mono', Consolas, monospace",
                 }}
@@ -2829,7 +3115,7 @@ function ArchifyGraphCanvas({
                           style={{
                             background: "transparent",
                             border: "none",
-                            color: isActive ? (isDark ? "#f97316" : "#ea580c") : isDark ? "#64748b" : "#94a3b8",
+                            color: isActive ? (isDark ? "#00f5d4" : "#0b8f68") : isDark ? "#64748b" : "#94a3b8",
                             fontWeight: 800,
                             fontSize: "11px",
                             letterSpacing: "0.08em",
@@ -2847,7 +3133,7 @@ function ArchifyGraphCanvas({
                                 left: 0,
                                 right: 0,
                                 height: 2,
-                                background: isDark ? "#f97316" : "#ea580c",
+                                background: isDark ? "#00f5d4" : "#0b8f68",
                               }}
                             />
                           )}
@@ -2860,7 +3146,7 @@ function ArchifyGraphCanvas({
                   <button
                     type="button"
                     onClick={() => setIsHudOpen(false)}
-                    title="Thu gọn bảng này để nhìn toàn cảnh sơ đồ"
+                    title={language === "vi" ? "Thu gọn bảng này để nhìn toàn cảnh sơ đồ" : "Collapse inspector panel"}
                     style={{
                       background: isDark ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9",
                       border: `1px solid ${isDark ? "#334155" : "#cbd5e1"}`,
@@ -2872,32 +3158,38 @@ function ArchifyGraphCanvas({
                       cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
-                      gap: "4px",
+                      gap: "5px",
                     }}
                   >
-                    ✕ Thu gọn
+                    <CloseIcon size={10} color="currentColor" />
+                    <span>{language === "vi" ? "Thu gọn" : "Collapse"}</span>
                   </button>
                 </div>
 
                 {/* Status Header Badge */}
-                <p
+                <div
                   style={{
-                    margin: "0 0 8px",
-                    fontSize: "9.5px",
-                    fontWeight: 800,
-                    color: isDark ? "#f97316" : "#ea580c",
-                    letterSpacing: "0.07em",
-                    display: "flex",
+                    display: "inline-flex",
                     alignItems: "center",
                     gap: "6px",
-                    flexWrap: "wrap",
+                    padding: "3px 8px",
+                    borderRadius: "6px",
+                    background: isDark ? "rgba(0, 245, 212, 0.1)" : "#e6f7f0",
+                    border: `1px solid ${isDark ? "rgba(0, 245, 212, 0.25)" : "rgba(11, 143, 104, 0.25)"}`,
+                    color: isDark ? "#00f5d4" : "#065e44",
+                    fontSize: "9.5px",
+                    fontWeight: 800,
+                    letterSpacing: "0.07em",
+                    marginBottom: "10px",
                   }}
                 >
-                  <span>● {loading ? "ANALYZING" : "LIVE ARCHIFY"}</span>
-                  <span style={{ color: isDark ? "#94a3b8" : "#64748b" }}>
-                    {nodes.filter((n) => n.type === "archifyNode").length} COMPONENTS • {edges.length} RELATIONS
+                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: isDark ? "#00f5d4" : "#0b8f68" }} />
+                  <span>{loading ? (language === "vi" ? "ĐANG PHÂN TÍCH" : "ANALYZING") : "LIVE ARCHIFY"}</span>
+                  <span style={{ opacity: 0.75 }}>•</span>
+                  <span>
+                    {nodes.filter((n) => n.type === "archifyNode").length} {t("diagram.components").toUpperCase()} • {edges.length} {t("diagram.connections").toUpperCase()}
                   </span>
-                </p>
+                </div>
 
                 {/* Tab 1: MAP Overview */}
                 {hudTab === "MAP" && (
@@ -2911,9 +3203,9 @@ function ArchifyGraphCanvas({
 
                     {/* Route Probe Quick Selector */}
                     <div style={{ marginTop: "12px", padding: "10px", borderRadius: "8px", background: isDark ? "rgba(15, 23, 42, 0.6)" : "#f8fafc", border: `1px solid ${isDark ? "#1e293b" : "#e2e8f0"}` }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10.5px", fontWeight: 750, color: "#ffbd2e", marginBottom: "6px" }}>
-                        <BoltIcon size={12} color="#ffbd2e" />
-                        <span>Route Probe (Path Tracer)</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10.5px", fontWeight: 750, color: isDark ? "#00f5d4" : "#065e44", marginBottom: "6px" }}>
+                        <BoltIcon size={12} color={isDark ? "#00f5d4" : "#0b8f68"} />
+                        <span>{language === "vi" ? "Dò luồng đường đi (Route Probe)" : "Route Probe (Path Tracer)"}</span>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "10.5px" }}>
                         <select
@@ -2921,7 +3213,7 @@ function ArchifyGraphCanvas({
                           onChange={(e) => setRouteStartId(e.target.value || null)}
                           style={{ padding: "4px 8px", borderRadius: "5px", background: isDark ? "#091222" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a", border: `1px solid ${isDark ? "#334155" : "#cbd5e1"}` }}
                         >
-                          <option value="">Select Start Node (A)...</option>
+                          <option value="">{language === "vi" ? "Chọn điểm bắt đầu (A)..." : "Select Start Node (A)..."}</option>
                           {nodes
                             .filter((n) => n.type === "archifyNode")
                             .map((n) => (
@@ -2936,7 +3228,7 @@ function ArchifyGraphCanvas({
                           onChange={(e) => setRouteEndId(e.target.value || null)}
                           style={{ padding: "4px 8px", borderRadius: "5px", background: isDark ? "#091222" : "#ffffff", color: isDark ? "#f8fafc" : "#0f172a", border: `1px solid ${isDark ? "#334155" : "#cbd5e1"}` }}
                         >
-                          <option value="">Select Target Node (B)...</option>
+                          <option value="">{language === "vi" ? "Chọn điểm đích (B)..." : "Select Target Node (B)..."}</option>
                           {nodes
                             .filter((n) => n.type === "archifyNode")
                             .map((n) => (
@@ -2959,12 +3251,20 @@ function ArchifyGraphCanvas({
                             fontWeight: 700,
                             borderRadius: "6px",
                             border: "none",
-                            background: routeStartId && routeEndId ? "#ffbd2e" : isDark ? "#334155" : "#cbd5e1",
-                            color: "#0f172a",
+                            background: routeStartId && routeEndId
+                              ? isDark
+                                ? "linear-gradient(135deg, #00f5d4 0%, #00d2b4 100%)"
+                                : "linear-gradient(135deg, #0e8561 0%, #066045 100%)"
+                              : isDark
+                              ? "#334155"
+                              : "#cbd5e1",
+                            color: routeStartId && routeEndId ? (isDark ? "#041410" : "#ffffff") : "#64748b",
                             cursor: routeStartId && routeEndId ? "pointer" : "not-allowed",
+                            boxShadow: routeStartId && routeEndId ? (isDark ? "0 4px 14px rgba(0, 245, 212, 0.3)" : "0 4px 14px rgba(11, 143, 104, 0.25)") : "none",
+                            transition: "all 0.18s ease",
                           }}
                         >
-                          Trace Path Between A & B
+                          {language === "vi" ? "Dò luồng đường đi giữa A & B" : "Trace Path Between A & B"}
                         </button>
                       </div>
                     </div>
@@ -3017,15 +3317,15 @@ function ArchifyGraphCanvas({
                               gap: "5px",
                               padding: "3px 8px",
                               borderRadius: "5px",
-                              background: isDark ? "rgba(245, 158, 11, 0.12)" : "#fef3c7",
-                              border: `1px solid ${isDark ? "rgba(245, 158, 11, 0.35)" : "#f59e0b"}`,
-                              color: isDark ? "#fbbf24" : "#b45309",
+                              background: isDark ? "rgba(0, 245, 212, 0.1)" : "#e6f7f0",
+                              border: `1px solid ${isDark ? "rgba(0, 245, 212, 0.25)" : "rgba(11, 143, 104, 0.25)"}`,
+                              color: isDark ? "#00f5d4" : "#065e44",
                               fontSize: "10px",
                               fontWeight: 700,
                               marginBottom: "8px",
                             }}
                           >
-                            <span>📍</span>
+                            <CodeNodeIcon size={11} color="currentColor" />
                             <span>{selectedNodeData.detailCard?.lineRange || selectedNodeData.extraText}</span>
                           </div>
                         )}
@@ -3043,14 +3343,17 @@ function ArchifyGraphCanvas({
                           <Link
                             href={`/projects/${analysisId}/files?path=${encodeURIComponent(selectedNodeData.detailCard?.filePath || selectedNodeData.path || "")}`}
                             style={{
-                              display: "inline-block",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
                               marginBottom: "10px",
                               fontSize: "10.5px",
                               color: isDark ? "#38bdf8" : "#0284c7",
                               textDecoration: "underline",
                             }}
                           >
-                            View source file in Explorer ↗
+                            <span>View source file in Explorer</span>
+                            <ExternalLinkIcon size={10} color="currentColor" />
                           </Link>
                         )}
 
@@ -3099,22 +3402,23 @@ function ArchifyGraphCanvas({
                               marginBottom: "10px",
                             }}
                           >
-                            <span>🔍 Mở sơ đồ chi tiết:</span>
+                            <SearchIcon size={13} color="currentColor" />
+                            <span>{language === "vi" ? "Mở sơ đồ chi tiết:" : "Open detailed diagram:"}</span>
                             <strong style={{ textTransform: "capitalize" }}>{selectedNodeData.childDiagramType}</strong>
-                            <span>→</span>
+                            <ArrowRightIcon size={11} color="currentColor" />
                           </button>
                         )}
 
                         {/* Direction Trace Buttons: Trace Reach */}
                         <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "2px" }}>
                           <div style={{ fontSize: "10px", fontWeight: 700, color: isDark ? "#94a3b8" : "#64748b" }}>
-                            Trace Reach (Ảnh hưởng & Phụ thuộc):
+                            {language === "vi" ? "Trace Reach (Ảnh hưởng & Phụ thuộc):" : "Trace Reach (Impact & Dependencies):"}
                           </div>
                           <div style={{ display: "flex", gap: "6px" }}>
                             <button
                               type="button"
                               onClick={() => setTraceDirection("upstream")}
-                              title="Xem các thành phần gọi đến hoặc phụ thuộc vào node này"
+                              title={language === "vi" ? "Xem các thành phần gọi đến hoặc phụ thuộc vào node này" : "Inspect components that call or depend on this node"}
                               style={{
                                 flex: 1,
                                 display: "flex",
@@ -3132,7 +3436,7 @@ function ArchifyGraphCanvas({
                               }}
                             >
                               <ArrowUpIcon size={11} />
-                              <span>Ai phụ thuộc nó</span>
+                              <span>{language === "vi" ? "Ai phụ thuộc nó" : "Upstream callers"}</span>
                               {selectedNodeData.detailCard?.upstreamNodes && (
                                 <span style={{ opacity: 0.85 }}>({selectedNodeData.detailCard.upstreamNodes.length})</span>
                               )}
@@ -3140,7 +3444,7 @@ function ArchifyGraphCanvas({
                             <button
                               type="button"
                               onClick={() => setTraceDirection("downstream")}
-                              title="Xem các thành phần mà node này gọi đến hoặc phụ thuộc"
+                              title={language === "vi" ? "Xem các thành phần mà node này gọi đến hoặc phụ thuộc" : "Inspect downstream dependencies called by this node"}
                               style={{
                                 flex: 1,
                                 display: "flex",
@@ -3158,7 +3462,7 @@ function ArchifyGraphCanvas({
                               }}
                             >
                               <ArrowDownIcon size={11} />
-                              <span>Nó phụ thuộc vào</span>
+                              <span>{language === "vi" ? "Nó phụ thuộc vào" : "Dependencies"}</span>
                               {selectedNodeData.detailCard?.downstreamNodes && (
                                 <span style={{ opacity: 0.85 }}>({selectedNodeData.detailCard.downstreamNodes.length})</span>
                               )}
@@ -3177,9 +3481,9 @@ function ArchifyGraphCanvas({
                               fontSize: "9.5px",
                               fontWeight: 650,
                               borderRadius: "5px",
-                              border: `1px solid ${isDark ? "#334155" : "#cbd5e1"}`,
-                              background: routeStartId === selectedNodeData.id ? "#ffbd2e" : "transparent",
-                              color: routeStartId === selectedNodeData.id ? "#0f172a" : isDark ? "#94a3b8" : "#475569",
+                              border: `1px solid ${routeStartId === selectedNodeData.id ? (isDark ? "#00f5d4" : "#0b8f68") : isDark ? "#334155" : "#cbd5e1"}`,
+                              background: routeStartId === selectedNodeData.id ? (isDark ? "#00f5d4" : "#0b8f68") : "transparent",
+                              color: routeStartId === selectedNodeData.id ? (isDark ? "#041410" : "#ffffff") : isDark ? "#94a3b8" : "#475569",
                               cursor: "pointer",
                             }}
                           >
@@ -3194,9 +3498,9 @@ function ArchifyGraphCanvas({
                               fontSize: "9.5px",
                               fontWeight: 650,
                               borderRadius: "5px",
-                              border: `1px solid ${isDark ? "#334155" : "#cbd5e1"}`,
-                              background: routeEndId === selectedNodeData.id ? "#ffbd2e" : "transparent",
-                              color: routeEndId === selectedNodeData.id ? "#0f172a" : isDark ? "#94a3b8" : "#475569",
+                              border: `1px solid ${routeEndId === selectedNodeData.id ? (isDark ? "#00f5d4" : "#0b8f68") : isDark ? "#334155" : "#cbd5e1"}`,
+                              background: routeEndId === selectedNodeData.id ? (isDark ? "#00f5d4" : "#0b8f68") : "transparent",
+                              color: routeEndId === selectedNodeData.id ? (isDark ? "#041410" : "#ffffff") : isDark ? "#94a3b8" : "#475569",
                               cursor: "pointer",
                             }}
                           >
@@ -3221,7 +3525,7 @@ function ArchifyGraphCanvas({
                             cursor: "pointer",
                           }}
                         >
-                          Reset All Highlights
+                          {language === "vi" ? "Bỏ toàn bộ tiêu điểm" : "Reset All Highlights"}
                         </button>
                       </>
                     ) : selectedEdgeData ? (
@@ -3348,11 +3652,13 @@ function ArchifyGraphCanvas({
                     <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                       {[
                         { key: "all", label: "● ALL / Show All Layers", color: isDark ? "#f8fafc" : "#0f172a" },
-                        { key: "ui", label: "● 01 / User Interface & Gateway", color: isDark ? "#38bdf8" : "#0284c7" },
-                        { key: "runtime", label: "● 02 / Core Runtime & Services", color: isDark ? "#2dd4bf" : "#059669" },
-                        { key: "policy", label: "● EX / Policy, Guard & Gate", color: isDark ? "#fb7185" : "#e11d48" },
-                        { key: "data", label: "● Data, Persistence & DB", color: isDark ? "#c084fc" : "#7c3aed" },
-                        { key: "external", label: "● External & Cloud Systems", color: isDark ? "#fb923c" : "#d97706" },
+                        { key: "ui", label: "● Frontend / Client & UI", color: isDark ? "#38bdf8" : "#0284c7" },
+                        { key: "runtime", label: "● Backend / APIs & Services", color: isDark ? "#2dd4bf" : "#059669" },
+                        { key: "data", label: "● Database / Stores & DB", color: isDark ? "#c084fc" : "#7c3aed" },
+                        { key: "cloud", label: "● Cloud / Infra & CDN", color: isDark ? "#fbbf24" : "#d97706" },
+                        { key: "policy", label: "● Security / Auth & Rules", color: isDark ? "#fb7185" : "#e11d48" },
+                        { key: "bus", label: "● Message Bus / Events & Queue", color: isDark ? "#fb923c" : "#ea580c" },
+                        { key: "external", label: "● External / Users & 3rd Party", color: isDark ? "#94a3b8" : "#475569" },
                       ].map((lens) => (
                         <button
                           key={lens.key}
@@ -3405,8 +3711,8 @@ function ArchifyGraphCanvas({
                 <strong style={{ color: isDark ? "#f8fafc" : "#0f172a" }}>
                   {nodes.filter((n) => n.type === "archifyNode").length}
                 </strong>{" "}
-                components •{" "}
-                <strong style={{ color: isDark ? "#f8fafc" : "#0f172a" }}>{edges.length}</strong> connections
+                {t("diagram.components")} •{" "}
+                <strong style={{ color: isDark ? "#f8fafc" : "#0f172a" }}>{edges.length}</strong> {t("diagram.connections")}
               </span>
 
               {selectedNodeData && (
@@ -3421,7 +3727,7 @@ function ArchifyGraphCanvas({
               {/* Edge Style Legend */}
               <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <span style={{ display: "inline-block", width: 16, height: 2, background: isDark ? "#00f0ff" : "#0284c7" }} />
-                <span>Code Evidence</span>
+                <span>{t("diagram.codeEvidence")}</span>
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <span
@@ -3432,25 +3738,37 @@ function ArchifyGraphCanvas({
                     borderTop: `2px dashed ${isDark ? "#38bdf8" : "#0284c7"}`,
                   }}
                 />
-                <span>Suy luận luồng</span>
+                <span>{t("diagram.inferredFlow")}</span>
               </span>
 
-              {/* Role / Layer Colors */}
+              {/* 7 Architecture Categories from Design System */}
               <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "#00f0ff" }} />
-                Gateway / UI
+                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: isDark ? "#38bdf8" : "#0284c7" }} />
+                <span>Frontend</span>
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "#2dd4bf" }} />
-                Controller / Service
+                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: isDark ? "#2dd4bf" : "#059669" }} />
+                <span>Backend</span>
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "#a855f7" }} />
-                Data / DB
+                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: isDark ? "#c084fc" : "#7c3aed" }} />
+                <span>Database</span>
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "#f97316" }} />
-                External / Cloud
+                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: isDark ? "#fbbf24" : "#d97706" }} />
+                <span>Cloud</span>
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: isDark ? "#fb7185" : "#e11d48" }} />
+                <span>Security</span>
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: isDark ? "#fb923c" : "#ea580c" }} />
+                <span>Message Bus</span>
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: isDark ? "#94a3b8" : "#475569" }} />
+                <span>External</span>
               </span>
             </div>
           </div>

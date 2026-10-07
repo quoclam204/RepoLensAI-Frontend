@@ -3,11 +3,15 @@ import Link from "next/link";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageProvider } from "@/i18n/language-context";
+import { LanguageToggle } from "@/components/language-toggle";
+import { SiteNav } from "@/components/site-nav";
+import { SiteFooter } from "@/components/site-footer";
 import { RepoLensIcon } from "@/components/repolens-icon";
 
 export const metadata: Metadata = {
   title: { default: "RepoLens AI", template: "%s | RepoLens AI" },
-  description: "Evidence-grounded repository analysis frontend with full light and dark mode.",
+  description: "Evidence-grounded repository analysis frontend with full light and dark mode, bilingual VI / EN.",
   icons: {
     icon: "/favicon.svg",
   },
@@ -17,39 +21,39 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+          rel="stylesheet"
+        />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("repolens_theme");if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}document.documentElement.setAttribute("data-theme",t);document.documentElement.classList.toggle("dark",t==="dark");}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem("repolens_theme");if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}document.documentElement.setAttribute("data-theme",t);document.documentElement.classList.toggle("dark",t==="dark");var l=localStorage.getItem("repolens_language");if(l){document.documentElement.setAttribute("lang",l);}}catch(e){}})();`,
           }}
         />
       </head>
       <body>
         <ThemeProvider>
-          <header className="site-header">
-            <div className="page-shell header-inner">
-              <Link className="brand" href="/">
-                <span className="brand-mark" aria-hidden="true">
-                  <RepoLensIcon size={22} variant="gradient" />
-                </span>
-                <span>RepoLens <strong>AI</strong></span>
-              </Link>
-              <nav className="main-nav" aria-label="Main navigation">
-                <Link href="/analyze">Analyze</Link>
-                <Link href="/projects/demo-analysis/overview">Project workspace</Link>
-                <Link href="/projects/demo-analysis/architecture">Architecture</Link>
-              </nav>
-              <div className="header-actions" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "12px" }}>
-                <ThemeToggle />
+          <LanguageProvider>
+            <header className="site-header">
+              <div className="page-shell header-inner">
+                <Link className="brand" href="/">
+                  <span className="brand-mark" aria-hidden="true">
+                    <RepoLensIcon size={22} variant="gradient" />
+                  </span>
+                  <span>RepoLens <strong>AI</strong></span>
+                </Link>
+                <SiteNav />
+                <div className="header-actions" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
+                  <LanguageToggle />
+                  <ThemeToggle />
+                </div>
               </div>
-            </div>
-          </header>
-          {children}
-          <footer className="site-footer">
-            <div className="page-shell footer-inner">
-              <span>RepoLens AI frontend • Intelligent Software Architecture</span>
-              <span>Light & Dark Mode Enabled</span>
-            </div>
-          </footer>
+            </header>
+            {children}
+            <SiteFooter />
+          </LanguageProvider>
         </ThemeProvider>
       </body>
     </html>

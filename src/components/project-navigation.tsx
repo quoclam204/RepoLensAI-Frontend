@@ -11,6 +11,7 @@ export function ProjectNavigation({ projectId }: { projectId: string }) {
   const items = [
     [t("nav.overview"), "overview"],
     [t("nav.architecture"), "architecture"],
+    [t("nav.workflow"), "workflow"],
     [t("nav.dependencies"), "dependencies"],
     [t("nav.apis"), "apis"],
     [t("nav.database"), "database"],

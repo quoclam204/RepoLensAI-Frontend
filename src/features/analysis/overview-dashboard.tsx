@@ -4,11 +4,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ProjectNavigation } from "@/components/project-navigation";
 import { analysisGateway } from "@/services/analysis-gateway";
+import { useLanguage } from "@/i18n/language-context";
+import { PackageIcon } from "@/components/icons";
 import type { AnalysisStatus, AnalysisSummary, RepositoryOverview, RepositoryClassification } from "@/types/api";
 
 const stages: AnalysisStatus[] = ["Acquiring", "Scanning", "Analyzing", "Indexing", "Completed"];
 
 export function OverviewDashboard({ analysisId }: { analysisId: string }) {
+  const { t } = useLanguage();
   const [analysis, setAnalysis] = useState<AnalysisSummary | null>(null);
   const [overview, setOverview] = useState<RepositoryOverview | null>(null);
   const [classification, setClassification] = useState<RepositoryClassification | null>(null);
@@ -51,12 +54,37 @@ export function OverviewDashboard({ analysisId }: { analysisId: string }) {
 
   if (error) {
     return (
-      <main className="workspace-page"><div className="page-shell"><section className="state-panel"><h1>Unable to load analysis</h1><p>{error}</p><div className="state-actions"><button className="button primary" onClick={() => setRetryKey((value) => value + 1)}>Retry</button><Link className="button secondary" href="/analyze">New analysis</Link></div></section></div></main>
+      <main className="workspace-page">
+        <div className="page-shell">
+          <section className="state-panel">
+            <h1>{t("overview.unableToLoad")}</h1>
+            <p>{error.includes("404") ? t("overview.backend404") : error}</p>
+            <div className="state-actions">
+              <button className="button primary" onClick={() => setRetryKey((value) => value + 1)}>
+                {t("overview.retry")}
+              </button>
+              <Link className="button secondary" href="/analyze">
+                {t("overview.newAnalysis")}
+              </Link>
+            </div>
+          </section>
+        </div>
+      </main>
     );
   }
 
   if (!analysis) {
-    return <main className="workspace-page"><div className="page-shell"><section className="state-panel"><span className="spinner" /><h1>Loading analysis</h1><p>Retrieving the current lifecycle state.</p></section></div></main>;
+    return (
+      <main className="workspace-page">
+        <div className="page-shell">
+          <section className="state-panel">
+            <span className="spinner" />
+            <h1>{t("overview.loadingTitle")}</h1>
+            <p>{t("overview.loadingDesc")}</p>
+          </section>
+        </div>
+      </main>
+    );
   }
 
   const running = analysis.status !== "Completed" && analysis.status !== "Failed";
@@ -66,26 +94,48 @@ export function OverviewDashboard({ analysisId }: { analysisId: string }) {
       <div className="page-shell">
         <ProjectNavigation projectId={analysisId} />
         <div className="overview-heading">
-          <div><p className="eyebrow">Repository overview</p><h1>{analysis.repositoryName}</h1><p>{analysis.repositoryUrl ?? `Analysis ID: ${analysis.id}`}</p></div>
-          <span className={`lifecycle-badge ${running ? "running" : analysis.status.toLowerCase()}`}><i />{analysis.status}</span>
+          <div>
+            <p className="eyebrow">{t("overview.heading")}</p>
+            <h1>{analysis.repositoryName}</h1>
+            <p>{analysis.repositoryUrl ?? `Analysis ID: ${analysis.id}`}</p>
+          </div>
+          <span className={`lifecycle-badge ${running ? "running" : analysis.status.toLowerCase()}`}>
+            <i />{analysis.status}
+          </span>
         </div>
 
         <section className="progress-card">
-          <div><strong>{running ? "Analysis in progress" : analysis.status === "Completed" ? "Analysis complete" : "Analysis failed"}</strong><span>{analysis.progress}%</span></div>
-          <div className="progress-track"><i style={{ width: `${analysis.progress}%` }} /></div>
-          <div className="stage-row">{stages.map((stage) => <span className={stage === analysis.status ? "current" : ""} key={stage}>{stage}</span>)}</div>
+          <div className="progress-card-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <strong>
+              {running ? t("overview.inProgress") : analysis.status === "Completed" ? t("overview.complete") : t("overview.failed")}
+            </strong>
+            <span style={{ fontWeight: 700, color: "var(--accent)" }}>{analysis.progress}%</span>
+          </div>
+          <div className="progress-track">
+            <i style={{ width: `${analysis.progress}%` }} />
+          </div>
+          <div className="stage-row">
+            {stages.map((stage) => (
+              <span className={stage === analysis.status ? "current" : ""} key={stage}>
+                {stage}
+              </span>
+            ))}
+          </div>
         </section>
 
         {analysis.status === "Completed" && (
           <>
             {classification && (
               <div
+                className="classification-card"
                 style={{
-                  marginTop: "20px",
+                  marginTop: "16px",
                   padding: "16px 20px",
-                  background: "var(--card, #ffffff)",
-                  border: "1px solid var(--border, #e2e8f0)",
+                  background: "var(--card-bg)",
+                  border: "1px solid var(--card-border)",
                   borderRadius: "14px",
+                  backdropFilter: "blur(14px)",
+                  boxShadow: "var(--card-shadow)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
@@ -101,30 +151,33 @@ export function OverviewDashboard({ analysisId }: { analysisId: string }) {
                       gap: "6px",
                       padding: "6px 12px",
                       borderRadius: "8px",
-                      background: "rgba(16, 185, 129, 0.12)",
+                      background: "var(--accent-soft)",
                       border: "1px solid rgba(16, 185, 129, 0.35)",
-                      color: "#059669",
+                      color: "var(--accent)",
                       fontWeight: 750,
                       fontSize: "12px",
                     }}
                   >
-                    <span>📦 Loại Repository:</span>
-                    <span>{classification.type}</span>
-                    <span style={{ fontSize: "10.5px", opacity: 0.85 }}>({classification.confidence} Confidence)</span>
+                    <PackageIcon size={14} color="currentColor" />
+                    <span>{t("overview.repoType")}:</span>
+                    <span style={{ fontWeight: 800 }}>{classification.type}</span>
+                    <span style={{ fontSize: "11px", opacity: 0.85 }}>({classification.confidence} {t("overview.confidence")})</span>
                   </div>
-                  <p style={{ margin: 0, fontSize: "12.5px", color: "var(--muted)", maxWidth: 640 }}>
+                  <p style={{ margin: 0, fontSize: "12.5px", color: "var(--muted)", maxWidth: 640, lineHeight: 1.5 }}>
                     {classification.summary}
                   </p>
                 </div>
                 {classification.detectedLanguages?.length > 0 && (
-                  <div style={{ display: "flex", gap: "6px" }}>
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                     {classification.detectedLanguages.map((lang) => (
                       <span
                         key={lang}
                         style={{
-                          padding: "2px 8px",
-                          borderRadius: "4px",
-                          background: "var(--accent, #f1f5f9)",
+                          padding: "3px 9px",
+                          borderRadius: "6px",
+                          background: "var(--soft)",
+                          color: "var(--ink)",
+                          border: "1px solid var(--line)",
                           fontSize: "11px",
                           fontWeight: 600,
                         }}
@@ -165,13 +218,13 @@ export function OverviewDashboard({ analysisId }: { analysisId: string }) {
                   marginBottom: "6px",
                 }}
               >
-                Diagram Ready
+                {t("overview.diagramReady")}
               </span>
               <h2 style={{ margin: "2px 0 4px", fontSize: "18px", fontWeight: 700 }}>
-                Interactive Architecture Diagram
+                {t("overview.diagramTitle")}
               </h2>
               <p style={{ margin: 0, fontSize: "13px", color: "var(--muted)" }}>
-                Explore modules, layers, relationships, trace dependencies (Reach), and find execution routes directly on the web.
+                {t("overview.diagramDesc")}
               </p>
             </div>
             <div style={{ display: "flex", gap: "10px" }}>
@@ -179,13 +232,13 @@ export function OverviewDashboard({ analysisId }: { analysisId: string }) {
                 className="button primary"
                 href={`/projects/${encodeURIComponent(analysisId)}/architecture`}
               >
-                Open Architecture Diagram →
+                {t("overview.openDiagram")}
               </Link>
               <Link
                 className="button secondary"
                 href={`/projects/${encodeURIComponent(analysisId)}/dependencies`}
               >
-                View Dependencies →
+                {t("overview.viewDeps")}
               </Link>
             </div>
           </div>

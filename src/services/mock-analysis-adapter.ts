@@ -204,9 +204,31 @@ export const mockAnalysisAdapter = {
     await wait(280);
     return demoGraph;
   },
-  async dependencies() {
+  async dependencies(): Promise<VisualGraph> {
     await wait(280);
-    return demoGraph;
+    return {
+      nodes: [
+        { id: "proj-api", label: "RepoLens.Api", kind: "Project" },
+        { id: "proj-app", label: "RepoLens.Application", kind: "Project" },
+        { id: "proj-infra", label: "RepoLens.Infrastructure", kind: "Project" },
+        { id: "proj-dom", label: "RepoLens.Domain", kind: "Project" },
+        { id: "pkg-efcore", label: "Microsoft.EntityFrameworkCore", kind: "Package" },
+        { id: "pkg-npgsql", label: "Npgsql.EntityFrameworkCore.PostgreSQL", kind: "Package" },
+        { id: "pkg-mediatr", label: "MediatR", kind: "Package" },
+        { id: "pkg-serilog", label: "Serilog.AspNetCore", kind: "Package" },
+      ],
+      edges: [
+        { id: "de1", source: "proj-api", target: "proj-app", relationship: "ProjectReference", confidence: "confirmed" },
+        { id: "de2", source: "proj-api", target: "proj-infra", relationship: "ProjectReference", confidence: "confirmed" },
+        { id: "de3", source: "proj-infra", target: "proj-app", relationship: "ProjectReference", confidence: "confirmed" },
+        { id: "de4", source: "proj-app", target: "proj-dom", relationship: "ProjectReference", confidence: "confirmed" },
+        { id: "de5", source: "proj-infra", target: "pkg-efcore", relationship: "PackageReference", confidence: "confirmed" },
+        { id: "de6", source: "proj-infra", target: "pkg-npgsql", relationship: "PackageReference", confidence: "confirmed" },
+        { id: "de7", source: "proj-app", target: "pkg-mediatr", relationship: "PackageReference", confidence: "confirmed" },
+        { id: "de8", source: "proj-api", target: "pkg-serilog", relationship: "PackageReference", confidence: "confirmed" },
+      ],
+      totalRelationships: 8,
+    };
   },
   async endpoints(filters: EndpointQuery = {}) {
     await wait(260);
@@ -336,6 +358,59 @@ export const mockAnalysisAdapter = {
   async diagram(diagramType?: string): Promise<import("@/types/api").DiagramDto> {
     await wait(250);
     const type = diagramType || "architecture";
+    if (type === "dependencies") {
+      return {
+        diagramType: "dependencies",
+        repositoryType: "ApiBackend",
+        status: "Success",
+        databaseDetected: true,
+        availableDiagramTypes: ["dependencies"],
+        nodes: [
+          { id: "proj-api", label: "RepoLens.Api", kind: "project", role: "Project", evidence: ["src/RepoLens.Api/RepoLens.Api.csproj"] },
+          { id: "proj-app", label: "RepoLens.Application", kind: "project", role: "Project", evidence: ["src/RepoLens.Application/RepoLens.Application.csproj"] },
+          { id: "proj-infra", label: "RepoLens.Infrastructure", kind: "project", role: "Project", evidence: ["src/RepoLens.Infrastructure/RepoLens.Infrastructure.csproj"] },
+          { id: "proj-dom", label: "RepoLens.Domain", kind: "project", role: "Project", evidence: ["src/RepoLens.Domain/RepoLens.Domain.csproj"] },
+          { id: "pkg-efcore", label: "Microsoft.EntityFrameworkCore", kind: "package", role: "External", evidence: ["package.config / csproj", "Version: 9.0.2"] },
+          { id: "pkg-npgsql", label: "Npgsql.EntityFrameworkCore.PostgreSQL", kind: "package", role: "External", evidence: ["csproj", "Version: 9.0.4"] },
+          { id: "pkg-mediatr", label: "MediatR", kind: "package", role: "External", evidence: ["csproj", "Version: 12.4.1"] },
+          { id: "pkg-serilog", label: "Serilog.AspNetCore", kind: "package", role: "External", evidence: ["csproj", "Version: 8.0.3"] },
+        ],
+        edges: [
+          { id: "de1", from: "proj-api", to: "proj-app", kind: "references", label: "Project Ref", confidence: "High", isInferred: false },
+          { id: "de2", from: "proj-api", to: "proj-infra", kind: "references", label: "Project Ref", confidence: "High", isInferred: false },
+          { id: "de3", from: "proj-infra", to: "proj-app", kind: "references", label: "Project Ref", confidence: "High", isInferred: false },
+          { id: "de4", from: "proj-app", to: "proj-dom", kind: "references", label: "Project Ref", confidence: "High", isInferred: false },
+          { id: "de5", from: "proj-infra", to: "pkg-efcore", kind: "imports", label: "Package Ref", confidence: "High", isInferred: false },
+          { id: "de6", from: "proj-infra", to: "pkg-npgsql", kind: "imports", label: "Package Ref", confidence: "High", isInferred: false },
+          { id: "de7", from: "proj-app", to: "pkg-mediatr", kind: "imports", label: "Package Ref", confidence: "High", isInferred: false },
+          { id: "de8", from: "proj-api", to: "pkg-serilog", kind: "imports", label: "Package Ref", confidence: "High", isInferred: false },
+        ],
+        detailCards: [
+          {
+            nodeId: "proj-api",
+            title: "RepoLens.Api",
+            role: "Project",
+            filePath: "src/RepoLens.Api/RepoLens.Api.csproj",
+            symbol: "RepoLens.Api",
+            lineRange: "SRC 1",
+            description: "Dự án Web API tiếp nhận các HTTP requests từ client.",
+            upstreamNodes: [],
+            downstreamNodes: ["proj-app", "proj-infra", "pkg-serilog"],
+          },
+          {
+            nodeId: "pkg-efcore",
+            title: "Microsoft.EntityFrameworkCore",
+            role: "External",
+            filePath: "src/RepoLens.Infrastructure/RepoLens.Infrastructure.csproj",
+            symbol: "Microsoft.EntityFrameworkCore",
+            lineRange: "SRC 1",
+            description: "Thư viện ORM truy vấn cơ sở dữ liệu từ Microsoft.",
+            upstreamNodes: ["proj-infra"],
+            downstreamNodes: [],
+          },
+        ],
+      };
+    }
     return {
       diagramType: type,
       repositoryType: "ApiBackend",

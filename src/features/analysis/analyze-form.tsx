@@ -5,6 +5,7 @@ import { ChangeEvent, DragEvent, FormEvent, useState } from "react";
 import { analysisGateway, usesMockAnalysis } from "@/services/analysis-gateway";
 import { createZipArchive, shouldIgnorePath, type ZipFileInput } from "@/utils/client-zip";
 import { FolderIcon, ZipArchiveIcon, SpinnerIcon, UploadCloudIcon } from "@/components/icons";
+import { useLanguage } from "@/i18n/language-context";
 
 type InputMode = "GitUrl" | "Folder" | "Zip";
 const MAX_ZIP_BYTES = 100 * 1024 * 1024;
@@ -26,6 +27,7 @@ function validateRepositoryUrl(value: string) {
 
 export function AnalyzeForm() {
   const router = useRouter();
+  const { t, language } = useLanguage();
   const [mode, setMode] = useState<InputMode>("GitUrl");
   const [repositoryUrl, setRepositoryUrl] = useState("");
   const [zipFile, setZipFile] = useState<File | null>(null);
@@ -257,7 +259,7 @@ export function AnalyzeForm() {
           className={mode === "GitUrl" ? "active" : ""}
           onClick={() => changeMode("GitUrl")}
         >
-          Public Git URL
+          {t("analyze.tabGit")}
         </button>
         <button
           type="button"
@@ -266,7 +268,7 @@ export function AnalyzeForm() {
           className={mode === "Folder" ? "active" : ""}
           onClick={() => changeMode("Folder")}
         >
-          Upload Folder
+          {t("analyze.tabFolder")}
         </button>
         <button
           type="button"
@@ -275,24 +277,24 @@ export function AnalyzeForm() {
           className={mode === "Zip" ? "active" : ""}
           onClick={() => changeMode("Zip")}
         >
-          Upload ZIP
+          {t("analyze.tabZip")}
         </button>
       </div>
 
       <div className="analysis-field">
         {mode === "GitUrl" && (
           <label>
-            <span>Repository URL</span>
+            <span>{t("analyze.gitUrlLabel")}</span>
             <input
               type="url"
               value={repositoryUrl}
               onChange={(event) => setRepositoryUrl(event.target.value)}
-              placeholder="https://github.com/organization/repository"
+              placeholder={t("analyze.gitUrlPlaceholder")}
               autoComplete="url"
               aria-describedby="repository-hint"
             />
             <small id="repository-hint">
-              Enter any public GitHub or Git repository URL. RepoLens will clone, scan, and render diagrams automatically.
+              {t("analyze.gitUrlHelp")}
             </small>
           </label>
         )}
@@ -324,15 +326,15 @@ export function AnalyzeForm() {
             </span>
             <strong>
               {packingFolder
-                ? "Packaging folder client-side…"
+                ? t("analyze.packingFolder")
                 : folderInfo
-                  ? `Folder: ${folderInfo.name} (${folderInfo.fileCount} source files)`
-                  : "Drag & drop a folder here, or click to browse"}
+                  ? `${language === "vi" ? "Thư mục:" : "Folder:"} ${folderInfo.name} (${folderInfo.fileCount} ${language === "vi" ? "tệp mã nguồn" : "source files"})`
+                  : t("analyze.folderDropPrompt")}
             </strong>
             <small>
               {folderInfo
-                ? `${(folderInfo.sizeBytes / 1024 / 1024).toFixed(2)} MB ready for analysis`
-                : "Select any local code repository folder (skips .git, bin, obj & node_modules)"}
+                ? `${(folderInfo.sizeBytes / 1024 / 1024).toFixed(2)} MB ${language === "vi" ? "sẵn sàng phân tích" : "ready for analysis"}`
+                : t("analyze.folderDropSub")}
             </small>
           </label>
         )}
@@ -359,11 +361,11 @@ export function AnalyzeForm() {
             <span className="upload-mark" aria-hidden="true">
               <UploadCloudIcon size={22} />
             </span>
-            <strong>{zipFile && !folderInfo ? zipFile.name : "Choose or drop a repository ZIP"}</strong>
+            <strong>{zipFile && !folderInfo ? zipFile.name : t("analyze.zipDropPrompt")}</strong>
             <small>
               {zipFile && !folderInfo
-                ? `${(zipFile.size / 1024 / 1024).toFixed(1)} MB selected`
-                : "ZIP archive up to 100 MB"}
+                ? `${(zipFile.size / 1024 / 1024).toFixed(1)} MB`
+                : language === "vi" ? "Tệp nén ZIP dung lượng tối đa 100 MB" : "ZIP archive up to 100 MB"}
             </small>
           </label>
         )}
@@ -377,11 +379,11 @@ export function AnalyzeForm() {
 
       <div className="submit-row">
         <p>
-          Repository content is statically analyzed and never executed.
-          <span>{usesMockAnalysis ? " Local mock mode is active." : " Connected to the backend API."}</span>
+          {language === "vi" ? "Mã nguồn được phân tích tĩnh và tuyệt đối không bao giờ thực thi." : "Repository content is statically analyzed and never executed."}
+          <span>{usesMockAnalysis ? (language === "vi" ? " Chế độ Mock cục bộ đang bật." : " Local mock mode is active.") : (language === "vi" ? " Đã kết nối API Backend .NET." : " Connected to backend API.")}</span>
         </p>
         <button className="button primary" type="submit" disabled={submitting || packingFolder}>
-          {submitting ? "Analyzing repository…" : packingFolder ? "Preparing files…" : "Start analysis & view diagrams"}
+          {submitting ? t("analyze.submittingBtn") : packingFolder ? t("analyze.packingFolder") : t("analyze.submitBtn")}
         </button>
       </div>
     </form>

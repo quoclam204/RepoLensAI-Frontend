@@ -30,6 +30,8 @@ export interface AnalysisSummary {
 
 export interface RepositoryOverview {
   repositoryName: string;
+  sourceType?: string;
+  sourceLocation?: string;
   defaultBranch?: string;
   fileCount: number;
   lineCount: number;

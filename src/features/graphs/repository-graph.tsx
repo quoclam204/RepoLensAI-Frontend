@@ -4964,7 +4964,7 @@ function ArchifyGraphCanvas({
   // Click outside to close export menu
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as globalThis.Node)) {
         setIsExportOpen(false);
       }
     };

@@ -89,6 +89,23 @@ export function OverviewDashboard({ analysisId }: { analysisId: string }) {
 
   const running = analysis.status !== "Completed" && analysis.status !== "Failed";
 
+  const repoSource = analysis.repositoryUrl || overview?.sourceLocation;
+
+  const extractNameFromSource = (src?: string) => {
+    if (!src) return "";
+    const clean = src.replace(/\\/g, "/").split("/").filter(Boolean).pop();
+    if (!clean) return "";
+    return clean.replace(/\.git$/i, "").replace(/\.zip$/i, "") || clean;
+  };
+
+  const repoTitle =
+    (overview?.repositoryName && overview.repositoryName !== "Repository" ? overview.repositoryName : "") ||
+    (analysis.repositoryName && analysis.repositoryName !== "Repository" ? analysis.repositoryName : "") ||
+    extractNameFromSource(repoSource) ||
+    overview?.repositoryName ||
+    analysis.repositoryName ||
+    "Repository";
+
   return (
     <main className="workspace-page">
       <div className="page-shell">
@@ -96,8 +113,17 @@ export function OverviewDashboard({ analysisId }: { analysisId: string }) {
         <div className="overview-heading">
           <div>
             <p className="eyebrow">{t("overview.heading")}</p>
-            <h1>{analysis.repositoryName}</h1>
-            <p>{analysis.repositoryUrl ?? `Analysis ID: ${analysis.id}`}</p>
+            <h1>{repoTitle}</h1>
+            <p style={{ wordBreak: "break-all" }}>
+              {repoSource ? (
+                <>
+                  <span>{repoSource}</span>
+                  <span style={{ opacity: 0.6, marginLeft: "8px" }}>• Analysis ID: {analysis.id}</span>
+                </>
+              ) : (
+                `Analysis ID: ${analysis.id}`
+              )}
+            </p>
           </div>
           <span className={`lifecycle-badge ${running ? "running" : analysis.status.toLowerCase()}`}>
             <i />{analysis.status}

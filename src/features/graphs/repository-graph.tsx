@@ -86,6 +86,8 @@ type WorkflowPresetKey =
   | "05-lifecycle";
 
 
+export type ArchifyCategory = "ui" | "runtime" | "policy" | "data" | "cloud" | "bus" | "external";
+
 export interface ArchifyCustomNodeData extends Record<string, unknown> {
   id: string;
   label: string;
@@ -95,7 +97,7 @@ export interface ArchifyCustomNodeData extends Record<string, unknown> {
   extraText?: string;
   tag?: string;
   iconType: "window" | "external" | "code" | "shield" | "menu" | "cloud" | "db" | "grid" | "package";
-  category: "ui" | "runtime" | "policy" | "data" | "cloud" | "bus" | "external";
+  category: ArchifyCategory;
   theme: "dark" | "light";
   isSelected?: boolean;
   isConnected?: boolean;
@@ -110,7 +112,7 @@ export interface ArchifyCustomNodeData extends Record<string, unknown> {
 export interface BoundaryBoxData extends Record<string, unknown> {
   id: string;
   label: string;
-  category: "ui" | "runtime" | "policy" | "data" | "cloud" | "bus" | "external";
+  category: ArchifyCategory;
   width: number;
   height: number;
   theme: "dark" | "light";
@@ -1339,6 +1341,687 @@ export function buildRepoLensCleanArchitecture(theme: "dark" | "light"): { nodes
       data: { theme },
     };
   });
+
+  return { nodes, edges };
+}
+
+// =========================================================================
+// PRESET: Release Delivery Workflow ("Release Delivery Workflow")
+// 6 Horizontal Swimlanes, 10 Core Nodes, Multi-Branch Routing (Quality Gates & Verify)
+// =========================================================================
+export function buildReleaseDeliveryWorkflow(theme: "dark" | "light"): { nodes: FlowNode[]; edges: Edge[] } {
+  const nodes: FlowNode[] = [];
+  const laneWidth = 1140;
+
+  // Stages Top Marker
+  nodes.push(
+    { id: "st-rel-change", type: "stageNode", position: { x: 180, y: 15 }, zIndex: 0, data: { label: "01 • Change", theme } },
+    { id: "st-rel-build", type: "stageNode", position: { x: 520, y: 15 }, zIndex: 0, data: { label: "02 • Build + Verify", theme } },
+    { id: "st-rel-promote", type: "stageNode", position: { x: 860, y: 15 }, zIndex: 0, data: { label: "03 • Promote + Observe", theme } },
+  );
+
+  // 6 Horizontal Swimlanes
+  nodes.push(
+    {
+      id: "lane-rel-dev",
+      type: "boundaryNode",
+      position: { x: 30, y: 45 },
+      zIndex: -2,
+      data: { id: "lane-rel-dev", label: "01 / DEVELOPER", category: "ui", width: laneWidth, height: 115, theme },
+    },
+    {
+      id: "lane-rel-ci",
+      type: "boundaryNode",
+      position: { x: 30, y: 190 },
+      zIndex: -2,
+      data: { id: "lane-rel-ci", label: "02 / CONTINUOUS INTEGRATION", category: "runtime", width: laneWidth, height: 115, theme },
+    },
+    {
+      id: "lane-rel-gov",
+      type: "boundaryNode",
+      position: { x: 30, y: 335 },
+      zIndex: -2,
+      data: { id: "lane-rel-gov", label: "03 / RELEASE GOVERNANCE", category: "policy", width: laneWidth, height: 115, theme },
+    },
+    {
+      id: "lane-rel-prod",
+      type: "boundaryNode",
+      position: { x: 30, y: 480 },
+      zIndex: -2,
+      data: { id: "lane-rel-prod", label: "04 / PRODUCTION ENVIRONMENT", category: "cloud", width: laneWidth, height: 115, theme },
+    },
+    {
+      id: "lane-rel-comm",
+      type: "boundaryNode",
+      position: { x: 30, y: 625 },
+      zIndex: -2,
+      data: { id: "lane-rel-comm", label: "05 / RELEASE COMMUNICATION", category: "external", width: laneWidth, height: 115, theme },
+    },
+    {
+      id: "lane-rel-fail",
+      type: "boundaryNode",
+      position: { x: 30, y: 770 },
+      zIndex: -2,
+      data: { id: "lane-rel-fail", label: "EX / FAILURE + ROLLBACK (RECOVERY PATH)", category: "policy", width: laneWidth, height: 125, theme },
+    },
+  );
+
+  // Lane 01 Nodes (Developer)
+  nodes.push(
+    {
+      id: "rel-commit",
+      type: "archifyNode",
+      position: { x: 80, y: 75 },
+      zIndex: 5,
+      data: {
+        id: "rel-commit",
+        label: "Commit",
+        tag: "SIGNED CHANGE",
+        subtitle: "signed change",
+        role: "Cryptographically signed developer change.",
+        category: "ui",
+        iconType: "window",
+        theme,
+        detailCard: {
+          nodeId: "rel-commit",
+          title: "Commit",
+          role: "Signed developer commit",
+          description: "Developer pushes signed Git commit containing code changes and unit tests.",
+          upstreamNodes: [],
+          downstreamNodes: ["rel-pull-request"],
+        },
+      },
+    },
+    {
+      id: "rel-pull-request",
+      type: "archifyNode",
+      position: { x: 360, y: 75 },
+      zIndex: 5,
+      data: {
+        id: "rel-pull-request",
+        label: "Pull Request",
+        tag: "REVIEWED DIFF",
+        subtitle: "reviewed diff",
+        role: "Peer-reviewed diff and branch validation.",
+        category: "ui",
+        iconType: "window",
+        theme,
+        detailCard: {
+          nodeId: "rel-pull-request",
+          title: "Pull Request",
+          role: "Code review and pull request",
+          description: "Pull request workflow enforcing code reviews, diff validation, and branch policies.",
+          upstreamNodes: ["rel-commit"],
+          downstreamNodes: ["rel-build"],
+        },
+      },
+    },
+  );
+
+  // Lane 02 Nodes (Continuous Integration)
+  nodes.push(
+    {
+      id: "rel-build",
+      type: "archifyNode",
+      position: { x: 360, y: 220 },
+      zIndex: 5,
+      data: {
+        id: "rel-build",
+        label: "Build",
+        tag: "LOCKED INPUTS",
+        subtitle: "locked inputs",
+        extraText: "reproducible",
+        role: "Hermetic containerized build agent.",
+        category: "runtime",
+        iconType: "code",
+        theme,
+        detailCard: {
+          nodeId: "rel-build",
+          title: "Build",
+          role: "CI build agent",
+          description: "Hermetic, reproducible compilation from locked package manifests.",
+          upstreamNodes: ["rel-pull-request"],
+          downstreamNodes: ["rel-quality-gates"],
+        },
+      },
+    },
+    {
+      id: "rel-quality-gates",
+      type: "archifyNode",
+      position: { x: 640, y: 220 },
+      zIndex: 5,
+      data: {
+        id: "rel-quality-gates",
+        label: "Quality Gates",
+        tag: "TEST + SCAN",
+        subtitle: "test + scan",
+        extraText: "2 Outgoing Paths",
+        role: "Automated test suites, security scans, and code coverage checks.",
+        category: "policy",
+        iconType: "shield",
+        theme,
+        detailCard: {
+          nodeId: "rel-quality-gates",
+          title: "Quality Gates",
+          role: "Quality & security gatekeeper",
+          description: "Enforces unit/integration tests, SAST vulnerability scanning, and license compliance.",
+          upstreamNodes: ["rel-build"],
+          downstreamNodes: ["rel-approve", "rel-stop-release"],
+        },
+      },
+    },
+  );
+
+  // Lane 03 Nodes (Release Governance)
+  nodes.push(
+    {
+      id: "rel-approve",
+      type: "archifyNode",
+      position: { x: 760, y: 365 },
+      zIndex: 5,
+      data: {
+        id: "rel-approve",
+        label: "Approve",
+        tag: "RELEASE OWNER",
+        subtitle: "release owner",
+        role: "Explicit authorization from the release owner.",
+        category: "policy",
+        iconType: "shield",
+        theme,
+        detailCard: {
+          nodeId: "rel-approve",
+          title: "Approve",
+          role: "Release authorization gate",
+          description: "Authorized release manager approval gate.",
+          upstreamNodes: ["rel-quality-gates"],
+          downstreamNodes: ["rel-deploy"],
+        },
+      },
+    },
+  );
+
+  // Lane 04 Nodes (Production Environment)
+  nodes.push(
+    {
+      id: "rel-deploy",
+      type: "archifyNode",
+      position: { x: 640, y: 510 },
+      zIndex: 5,
+      data: {
+        id: "rel-deploy",
+        label: "Deploy",
+        tag: "CANARY 10%",
+        subtitle: "canary 10%",
+        role: "Canary rollout to progressive traffic partitions.",
+        category: "cloud",
+        iconType: "cloud",
+        theme,
+        detailCard: {
+          nodeId: "rel-deploy",
+          title: "Deploy",
+          role: "Canary deployment runner",
+          description: "Deploys container image to 10% canary traffic pool in production.",
+          upstreamNodes: ["rel-approve", "rel-rollback"],
+          downstreamNodes: ["rel-verify"],
+        },
+      },
+    },
+    {
+      id: "rel-verify",
+      type: "archifyNode",
+      position: { x: 920, y: 510 },
+      zIndex: 5,
+      data: {
+        id: "rel-verify",
+        label: "Verify",
+        tag: "SMOKE + SLO",
+        subtitle: "smoke + SLO",
+        extraText: "2 Outgoing Paths",
+        role: "Production canary telemetry and SLO monitoring.",
+        category: "runtime",
+        iconType: "code",
+        theme,
+        detailCard: {
+          nodeId: "rel-verify",
+          title: "Verify",
+          role: "Canary health monitor",
+          description: "Monitors latency, error budgets, and synthetic smoke tests on canary instances.",
+          upstreamNodes: ["rel-deploy"],
+          downstreamNodes: ["rel-announce", "rel-rollback"],
+        },
+      },
+    },
+  );
+
+  // Lane 05 Nodes (Release Communication)
+  nodes.push(
+    {
+      id: "rel-announce",
+      type: "archifyNode",
+      position: { x: 920, y: 655 },
+      zIndex: 5,
+      data: {
+        id: "rel-announce",
+        label: "Announce",
+        tag: "STATUS + NOTES",
+        subtitle: "status + notes",
+        role: "Automated broadcast of release notes and deployment status.",
+        category: "external",
+        iconType: "external",
+        theme,
+        detailCard: {
+          nodeId: "rel-announce",
+          title: "Announce",
+          role: "Release broadcast",
+          description: "Publishes release notes, notifies on-call teams, and records audit changelogs.",
+          upstreamNodes: ["rel-verify"],
+          downstreamNodes: [],
+        },
+      },
+    },
+  );
+
+  // Lane 06 Nodes (Failure + Rollback)
+  nodes.push(
+    {
+      id: "rel-stop-release",
+      type: "archifyNode",
+      position: { x: 360, y: 800 },
+      zIndex: 5,
+      data: {
+        id: "rel-stop-release",
+        label: "Stop Release",
+        tag: "GATE FAILED",
+        subtitle: "gate failed",
+        role: "Immediate abort of deployment pipeline.",
+        category: "policy",
+        iconType: "shield",
+        theme,
+        detailCard: {
+          nodeId: "rel-stop-release",
+          title: "Stop Release",
+          role: "Pipeline abort action",
+          description: "Aborts the release pipeline and triggers alerts when quality gates fail.",
+          upstreamNodes: ["rel-quality-gates"],
+          downstreamNodes: [],
+        },
+      },
+    },
+    {
+      id: "rel-rollback",
+      type: "archifyNode",
+      position: { x: 760, y: 800 },
+      zIndex: 5,
+      data: {
+        id: "rel-rollback",
+        label: "Rollback",
+        tag: "LAST GOOD IMAGE",
+        subtitle: "last good image",
+        extraText: "Recovery Path",
+        role: "Automated rollback to the last verified stable image.",
+        category: "bus",
+        iconType: "package",
+        theme,
+        detailCard: {
+          nodeId: "rel-rollback",
+          title: "Rollback",
+          role: "Automated recovery mechanism",
+          description: "Restores previous known-good deployment upon canary SLO breach.",
+          upstreamNodes: ["rel-verify"],
+          downstreamNodes: ["rel-deploy"],
+        },
+      },
+    },
+  );
+
+  // Multi-Branch Edges
+  const rawEdges = [
+    { id: "e-rel-1", source: "rel-commit", target: "rel-pull-request", label: "commits" },
+    { id: "e-rel-2", source: "rel-pull-request", target: "rel-build", label: "merge" },
+    { id: "e-rel-3", source: "rel-build", target: "rel-quality-gates", label: "artifacts" },
+    // Multi-branch from Quality Gates
+    { id: "e-rel-4", source: "rel-quality-gates", target: "rel-approve", label: "passed" },
+    { id: "e-rel-5", source: "rel-quality-gates", target: "rel-stop-release", label: "red / failed" },
+    // Approve to Deploy
+    { id: "e-rel-6", source: "rel-approve", target: "rel-deploy", label: "sign-off" },
+    // Deploy to Verify
+    { id: "e-rel-7", source: "rel-deploy", target: "rel-verify", label: "canary 10%" },
+    // Multi-branch from Verify
+    { id: "e-rel-8", source: "rel-verify", target: "rel-announce", label: "healthy" },
+    { id: "e-rel-9", source: "rel-verify", target: "rel-rollback", label: "SLO breach" },
+    // Recovery Path: Rollback to Deploy
+    { id: "e-rel-10", source: "rel-rollback", target: "rel-deploy", label: "restore" },
+  ];
+
+  const nodePosMap = new Map<string, { x: number; y: number }>();
+  nodes.forEach((n) => {
+    if (n.type === "archifyNode") nodePosMap.set(n.id, n.position);
+  });
+
+  const isDark = theme === "dark";
+  const edgeColor = isDark ? "#00f0ff" : "#0284c7";
+
+  const edges: Edge[] = rawEdges.map((e) => {
+    const sPos = nodePosMap.get(e.source) || { x: 0, y: 0 };
+    const tPos = nodePosMap.get(e.target) || { x: 0, y: 0 };
+    const { sourceHandle, targetHandle } = getOptimalHandles(sPos, tPos);
+
+    const isFailureEdge = e.id === "e-rel-5" || e.id === "e-rel-9";
+    const isRecoveryEdge = e.id === "e-rel-10";
+    const stroke = isFailureEdge
+      ? (isDark ? "#f43f5e" : "#e11d48")
+      : isRecoveryEdge
+      ? (isDark ? "#c084fc" : "#9333ea")
+      : edgeColor;
+
+    return {
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle,
+      targetHandle,
+      label: e.label,
+      type: "archifyEdge",
+      animated: isFailureEdge || isRecoveryEdge,
+      markerEnd: { type: MarkerType.ArrowClosed, color: stroke, width: 14, height: 14 },
+      style: {
+        stroke,
+        strokeWidth: 2,
+        strokeDasharray: isFailureEdge || isRecoveryEdge ? "5 5" : undefined,
+      },
+      data: { theme },
+    };
+  });
+
+  return { nodes, edges };
+}
+
+// =========================================================================
+// Real Repository Workflow Builder (Grounding from CI/CD YAML files)
+// =========================================================================
+export function buildWorkflowFromDiagramDto(
+  diagram: DiagramDto,
+  theme: "dark" | "light",
+): { nodes: FlowNode[]; edges: Edge[] } {
+  if (!diagram || !diagram.nodes || diagram.nodes.length === 0) {
+    return { nodes: [], edges: [] };
+  }
+
+  const nodes: FlowNode[] = [];
+  const isDark = theme === "dark";
+
+  const detailCardMap = new Map<string, DiagramDetailCardDto>();
+  if (diagram.detailCards) {
+    for (const card of diagram.detailCards) {
+      if (card && card.nodeId) detailCardMap.set(card.nodeId, card);
+    }
+  }
+
+  // Compute topological rank / depth for each node
+  const inDegree = new Map<string, number>();
+  const childrenMap = new Map<string, string[]>();
+  for (const n of diagram.nodes) {
+    inDegree.set(n.id, 0);
+    childrenMap.set(n.id, []);
+  }
+
+  if (diagram.edges) {
+    for (const e of diagram.edges) {
+      if (childrenMap.has(e.from) && inDegree.has(e.to)) {
+        childrenMap.get(e.from)!.push(e.to);
+        inDegree.set(e.to, (inDegree.get(e.to) || 0) + 1);
+      }
+    }
+  }
+
+  const depthMap = new Map<string, number>();
+  const queue: string[] = [];
+
+  for (const [id, deg] of inDegree.entries()) {
+    if (deg === 0) {
+      depthMap.set(id, 0);
+      queue.push(id);
+    }
+  }
+
+  while (queue.length > 0) {
+    const curr = queue.shift()!;
+    const currDepth = depthMap.get(curr) || 0;
+    const children = childrenMap.get(curr) || [];
+    for (const ch of children) {
+      const nextDepth = Math.max(depthMap.get(ch) || 0, currDepth + 1);
+      depthMap.set(ch, nextDepth);
+      const remainingDeg = (inDegree.get(ch) || 1) - 1;
+      inDegree.set(ch, remainingDeg);
+      if (remainingDeg <= 0) {
+        queue.push(ch);
+      }
+    }
+  }
+
+  for (const n of diagram.nodes) {
+    if (!depthMap.has(n.id)) {
+      depthMap.set(n.id, n.kind === "trigger" ? 0 : 1);
+    }
+  }
+
+  let maxDepth = 0;
+  for (const d of depthMap.values()) {
+    if (d > maxDepth) maxDepth = d;
+  }
+  const laneWidth = Math.max(1160, (maxDepth + 1) * 280 + 120);
+
+  const stageColWidth = laneWidth / 3;
+  nodes.push(
+    {
+      id: "st-wf-1",
+      type: "stageNode",
+      position: { x: 40, y: 15 },
+      zIndex: 0,
+      data: { label: "Change / Trigger", theme },
+    },
+    {
+      id: "st-wf-2",
+      type: "stageNode",
+      position: { x: 40 + stageColWidth, y: 15 },
+      zIndex: 0,
+      data: { label: "Build + Verify", theme },
+    },
+    {
+      id: "st-wf-3",
+      type: "stageNode",
+      position: { x: 40 + stageColWidth * 2, y: 15 },
+      zIndex: 0,
+      data: { label: "Promote + Observe", theme },
+    },
+  );
+
+  nodes.push(
+    {
+      id: "lane-wf-1",
+      type: "boundaryNode",
+      position: { x: 25, y: 45 },
+      zIndex: -2,
+      data: { id: "lane-wf-1", label: "01 / Developer & Trigger", category: "ui", width: laneWidth, height: 135, theme },
+    },
+    {
+      id: "lane-wf-2",
+      type: "boundaryNode",
+      position: { x: 25, y: 190 },
+      zIndex: -2,
+      data: { id: "lane-wf-2", label: "02 / Continuous Integration", category: "runtime", width: laneWidth, height: 135, theme },
+    },
+    {
+      id: "lane-wf-3",
+      type: "boundaryNode",
+      position: { x: 25, y: 335 },
+      zIndex: -2,
+      data: { id: "lane-wf-3", label: "03 / Release Governance & Artifacts", category: "policy", width: laneWidth, height: 135, theme },
+    },
+    {
+      id: "lane-wf-4",
+      type: "boundaryNode",
+      position: { x: 25, y: 480 },
+      zIndex: -2,
+      data: { id: "lane-wf-4", label: "04 / Production Environment", category: "cloud", width: laneWidth, height: 135, theme },
+    },
+    {
+      id: "lane-wf-5",
+      type: "boundaryNode",
+      position: { x: 25, y: 625 },
+      zIndex: -2,
+      data: { id: "lane-wf-5", label: "05 / Release Communication", category: "bus", width: laneWidth, height: 135, theme },
+    },
+    {
+      id: "lane-wf-6",
+      type: "boundaryNode",
+      position: { x: 25, y: 770 },
+      zIndex: -2,
+      data: { id: "lane-wf-6", label: "EX / Failure & Rollback", category: "policy", width: laneWidth, height: 135, theme },
+    },
+  );
+
+  const laneYMap: Record<string, number> = {
+    trigger: 75,
+    ci: 220,
+    package: 365,
+    deploy: 510,
+    comm: 655,
+    rollback: 800,
+  };
+
+  const laneCountMap = new Map<string, number>();
+  const nodePosMap = new Map<string, { x: number; y: number }>();
+
+  for (const n of diagram.nodes) {
+    const roleLower = (n.role || "").toLowerCase();
+    const kindLower = (n.kind || "").toLowerCase();
+
+    let laneKey = "ci";
+    let category: ArchifyCustomNodeData["category"] = "runtime";
+    let iconType: ArchifyCustomNodeData["iconType"] = "code";
+
+    if (kindLower === "trigger" || roleLower === "trigger") {
+      laneKey = "trigger";
+      category = "ui";
+      iconType = "window";
+    } else if (roleLower.includes("rollback") || roleLower.includes("fail") || roleLower.includes("revert")) {
+      laneKey = "rollback";
+      category = "policy";
+      iconType = "shield";
+    } else if (roleLower.includes("comm") || roleLower.includes("notify") || roleLower.includes("slack")) {
+      laneKey = "comm";
+      category = "bus";
+      iconType = "external";
+    } else if (roleLower.includes("deploy") || roleLower.includes("prod") || roleLower.includes("cluster")) {
+      laneKey = "deploy";
+      category = "cloud";
+      iconType = "cloud";
+    } else if (roleLower.includes("package") || roleLower.includes("docker") || roleLower.includes("artifact")) {
+      laneKey = "package";
+      category = "policy";
+      iconType = "package";
+    } else if (roleLower.includes("test") || roleLower.includes("lint") || roleLower.includes("verify") || roleLower.includes("scan")) {
+      laneKey = "ci";
+      category = "runtime";
+      iconType = "shield";
+    } else {
+      laneKey = "ci";
+      category = "runtime";
+      iconType = "code";
+    }
+
+    const depth = depthMap.get(n.id) || 0;
+    const laneIndex = laneCountMap.get(`${laneKey}-${depth}`) || 0;
+    laneCountMap.set(`${laneKey}-${depth}`, laneIndex + 1);
+
+    const posX = 70 + depth * 270 + laneIndex * 15;
+    const posY = (laneYMap[laneKey] ?? 220) + (laneIndex > 0 ? (laneIndex % 2 === 1 ? 12 : -12) : 0);
+
+    nodePosMap.set(n.id, { x: posX, y: posY });
+
+    const card = detailCardMap.get(n.id);
+    const detailCard = card
+      ? {
+          nodeId: n.id,
+          title: card.title || n.label,
+          role: card.role || n.role,
+          filePath: card.filePath,
+          symbol: card.symbol,
+          lineRange: card.lineRange,
+          description: card.description || `Job thực thi trong quy trình CI/CD.`,
+          upstreamNodes: card.upstreamNodes || [],
+          downstreamNodes: card.downstreamNodes || [],
+        }
+      : {
+          nodeId: n.id,
+          title: n.label,
+          role: n.role,
+          filePath: n.evidence && n.evidence[0] ? n.evidence[0] : ".github/workflows",
+          lineRange: n.evidence && n.evidence[1] ? n.evidence[1] : undefined,
+          description: `Thành phần CI/CD: ${n.label}`,
+          upstreamNodes: [],
+          downstreamNodes: [],
+        };
+
+    const evidenceLine = n.evidence && n.evidence.length > 0 ? n.evidence.join(" ") : undefined;
+
+    nodes.push({
+      id: n.id,
+      type: "archifyNode",
+      position: { x: posX, y: posY },
+      zIndex: 5,
+      data: {
+        id: n.id,
+        label: n.label,
+        tag: n.kind.toUpperCase(),
+        subtitle: n.role,
+        role: n.role,
+        extraText: evidenceLine,
+        category,
+        iconType,
+        theme,
+        detailCard,
+      },
+    });
+  }
+
+  const edges: Edge[] = [];
+  const edgeColor = isDark ? "#00f0ff" : "#0284c7";
+
+  if (diagram.edges) {
+    for (const e of diagram.edges) {
+      const sPos = nodePosMap.get(e.from) || { x: 0, y: 0 };
+      const tPos = nodePosMap.get(e.to) || { x: 0, y: 0 };
+      const { sourceHandle, targetHandle } = getOptimalHandles(sPos, tPos);
+
+      const isFailureEdge = (e.label || "").toLowerCase().includes("fail") || (e.kind || "").toLowerCase().includes("fail");
+      const isRecoveryEdge = (e.label || "").toLowerCase().includes("rollback") || (e.label || "").toLowerCase().includes("revert");
+      const stroke = isFailureEdge
+        ? (isDark ? "#f43f5e" : "#e11d48")
+        : isRecoveryEdge
+        ? (isDark ? "#c084fc" : "#9333ea")
+        : edgeColor;
+
+      edges.push({
+        id: e.id,
+        source: e.from,
+        target: e.to,
+        sourceHandle,
+        targetHandle,
+        label: e.label || undefined,
+        type: "archifyEdge",
+        animated: isFailureEdge || isRecoveryEdge,
+        markerEnd: { type: MarkerType.ArrowClosed, color: stroke, width: 14, height: 14 },
+        style: {
+          stroke,
+          strokeWidth: 2,
+          strokeDasharray: e.isInferred || isFailureEdge || isRecoveryEdge ? "5 5" : undefined,
+        },
+        data: { theme },
+      });
+    }
+  }
 
   return { nodes, edges };
 }
@@ -3004,11 +3687,12 @@ function drawDiagramToCanvas(
   const boundaryNodes = nodes.filter((n) => n.type === "boundaryNode" && !n.hidden);
   for (const n of boundaryNodes) {
     const el = wrapper.querySelector(`[data-id="${n.id}"]`) as HTMLElement;
-    const w = el ? el.offsetWidth : ((n.data as any)?.width || 1040);
-    const h = el ? el.offsetHeight : ((n.data as any)?.height || 135);
+    const data = n.data as BoundaryBoxData;
+    const w = el ? el.offsetWidth : (data?.width || 1040);
+    const h = el ? el.offsetHeight : (data?.height || 135);
     const x = n.position.x + offsetX;
     const y = n.position.y + offsetY;
-    const cat = (n.data as any)?.category || "ui";
+    const cat = (data?.category || "ui") as ArchifyCategory;
     const styles = CATEGORY_STYLES[targetMode]?.[cat] || CATEGORY_STYLES[targetMode].ui;
 
     ctx.save();
@@ -3025,7 +3709,7 @@ function drawDiagramToCanvas(
 
     ctx.font = "bold 11px system-ui, -apple-system, sans-serif";
     ctx.fillStyle = styles.laneText || (isDark ? "#94a3b8" : "#64748b");
-    ctx.fillText((n.data as any)?.label || "", x + 16, y + 20);
+    ctx.fillText(data?.label || "", x + 16, y + 20);
     ctx.restore();
   }
 
@@ -3255,14 +3939,15 @@ function generatePureSvgString(
   const boundaryNodes = nodes.filter((n) => n.type === "boundaryNode" && !n.hidden);
   for (const n of boundaryNodes) {
     const el = wrapper.querySelector(`[data-id="${n.id}"]`) as HTMLElement;
-    const w = el ? el.offsetWidth : ((n.data as any)?.width || 1040);
-    const h = el ? el.offsetHeight : ((n.data as any)?.height || 135);
+    const data = n.data as BoundaryBoxData;
+    const w = el ? el.offsetWidth : (data?.width || 1040);
+    const h = el ? el.offsetHeight : (data?.height || 135);
     const x = n.position.x + offsetX;
     const y = n.position.y + offsetY;
-    const cat = (n.data as any)?.category || "ui";
+    const cat = (data?.category || "ui") as ArchifyCategory;
     const styles = CATEGORY_STYLES[targetMode]?.[cat] || CATEGORY_STYLES[targetMode].ui;
     svgElements += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="12" fill="${styles.laneBg || (isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)")}" stroke="${styles.laneBorder || (isDark ? "rgba(255,255,255,0.12)" : "#cbd5e1")}" stroke-dasharray="4 4" stroke-width="1" />\n`;
-    svgElements += `<text x="${x + 16}" y="${y + 20}" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" fill="${styles.laneText || (isDark ? "#94a3b8" : "#64748b")}">${escapeXml((n.data as any)?.label || "")}</text>\n`;
+    svgElements += `<text x="${x + 16}" y="${y + 20}" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" fill="${styles.laneText || (isDark ? "#94a3b8" : "#64748b")}">${escapeXml(data?.label || "")}</text>\n`;
   }
 
   // 2. Edges
@@ -3380,8 +4065,10 @@ function ArchifyGraphCanvas({
   const { theme, toggleTheme } = useTheme();
   const { t, language } = useLanguage();
 
-  // Selected Workflow Tab (defaults to "05-repo" if analysisId is provided, else "repolens-arch")
-  const [activeTab, setActiveTab] = useState<WorkflowPresetKey>(analysisId ? "05-repo" : "repolens-arch");
+  // Selected Workflow Tab (defaults to "02-workflow" if kind is workflow, else "05-repo" if analysisId is provided)
+  const [activeTab, setActiveTab] = useState<WorkflowPresetKey>(
+    kind === "workflow" ? "02-workflow" : (analysisId ? "05-repo" : "repolens-arch")
+  );
 
   // Selected Node for Deep Focus & Halo Interaction
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -3525,6 +4212,44 @@ function ArchifyGraphCanvas({
       setTimeout(() => {
         reactFlow.fitView({ padding: 0.16, duration: 400 });
       }, 60);
+    } else if (activeTab === "02-workflow") {
+      if (analysisId) {
+        setLoading(true);
+        setError(null);
+
+        analysisGateway
+          .diagram(analysisId, "workflow")
+          .then((diagram) => {
+            setDiagramDto(diagram);
+            if (diagram.status === "Success" && diagram.nodes && diagram.nodes.length > 0) {
+              const { nodes: builtNodes, edges: builtEdges } = buildWorkflowFromDiagramDto(diagram, theme);
+              setNodes(builtNodes);
+              setEdges(builtEdges);
+            } else {
+              setNodes([]);
+              setEdges([]);
+            }
+            setTimeout(() => {
+              reactFlow.fitView({ padding: 0.14, duration: 400 });
+            }, 60);
+          })
+          .catch((err: unknown) => {
+            setError(err instanceof Error ? err.message : "Unable to load workflow diagram.");
+            setNodes([]);
+            setEdges([]);
+          })
+          .finally(() => {
+            setLoading(false);
+          });
+      } else {
+        const { nodes: builtNodes, edges: builtEdges } = buildReleaseDeliveryWorkflow(theme);
+        setNodes(builtNodes);
+        setEdges(builtEdges);
+        setRawGraph(null);
+        setTimeout(() => {
+          reactFlow.fitView({ padding: 0.14, duration: 400 });
+        }, 60);
+      }
     } else {
       const { nodes: builtNodes, edges: builtEdges } = buildAgentToolCallWorkflow(theme);
       setNodes(builtNodes);
@@ -4237,10 +4962,16 @@ function ArchifyGraphCanvas({
       label: language === "vi" ? "01 Kiến trúc Chuẩn (Clean Arch)" : "01 Clean Architecture SRS",
       file: "repolens-clean-architecture.html",
     });
+    tabs.push({
+      key: "02-workflow",
+      label: language === "vi" ? "02 Quy trình Phát hành (Workflow)" : "02 Release Delivery Workflow",
+      file: "release-delivery-workflow.html",
+    });
   } else {
     tabs.push(
       { key: "repolens-arch", label: "01 Clean Architecture SRS", file: "repolens-clean-architecture.html" },
-      { key: "01-agent", label: "02 Agent Tool Call", file: "agent-tool-call.workflow.html" },
+      { key: "02-workflow", label: "02 Release Delivery Workflow", file: "release-delivery-workflow.html" },
+      { key: "01-agent", label: "03 Agent Tool Call", file: "agent-tool-call.workflow.html" },
     );
   }
 

@@ -81,12 +81,15 @@ export const analysisApi = {
       startedAt: string;
       completedAt?: string | null;
       error?: string | null;
+      repositoryName?: string | null;
+      repositoryUrl?: string | null;
     }>(analysisPath(analysisId));
 
     return {
       id: data.id,
       status: data.status as AnalysisSummary["status"],
-      repositoryName: "Repository",
+      repositoryName: data.repositoryName || "Repository",
+      repositoryUrl: data.repositoryUrl ?? undefined,
       progress: data.progress ?? 0,
       createdAt: data.startedAt,
       updatedAt: data.completedAt ?? data.startedAt,
@@ -120,6 +123,8 @@ export const analysisApi = {
 
     return {
       repositoryName: data.repository?.name || "Repository",
+      sourceType: data.repository?.sourceType,
+      sourceLocation: data.repository?.sourceUrl,
       defaultBranch: data.repository?.commitHash || "main",
       fileCount: data.statistics?.sourceFiles ?? 0,
       lineCount: 0,

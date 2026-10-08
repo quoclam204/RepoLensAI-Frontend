@@ -179,6 +179,8 @@ export const mockAnalysisAdapter = {
     const record = readStore().find((item) => item.id === id) ?? fallbackRecord(id);
     return {
       repositoryName: record.repositoryName,
+      sourceType: record.repositoryUrl ? "GitUrl" : "ZipUpload",
+      sourceLocation: record.repositoryUrl || `${record.repositoryName}.zip`,
       defaultBranch: "main",
       fileCount: 1284,
       lineCount: 146820,

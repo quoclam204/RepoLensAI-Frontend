@@ -25,6 +25,7 @@ import {
   type EdgeMouseHandler,
 } from "@xyflow/react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { analysisGateway } from "@/services/analysis-gateway";
@@ -4046,6 +4047,30 @@ export function RepositoryGraph({
   );
 }
 
+function getDiagramTabIcon(type: string) {
+  switch (type.toLowerCase()) {
+    case "architecture":
+      return <ArchitectureIcon size={13} color="currentColor" />;
+    case "endpoints":
+      return <RouterNodeIcon size={13} color="currentColor" />;
+    case "erd":
+    case "database":
+      return <DatabaseNodeIcon size={13} color="currentColor" />;
+    case "route_map":
+      return <RouterNodeIcon size={13} color="currentColor" />;
+    case "component_tree":
+      return <WindowNodeIcon size={13} color="currentColor" />;
+    case "external_api":
+      return <CloudNodeIcon size={13} color="currentColor" />;
+    case "dependencies":
+      return <PackageIcon size={13} color="currentColor" />;
+    case "workflow":
+      return <CodeNodeIcon size={13} color="currentColor" />;
+    default:
+      return <ArchitectureIcon size={13} color="currentColor" />;
+  }
+}
+
 // Inner Canvas Component with Archify Features
 function ArchifyGraphCanvas({
   analysisId,
@@ -4054,7 +4079,8 @@ function ArchifyGraphCanvas({
   analysisId?: string;
   kind?: GraphKind;
 }) {
-  const reactFlow = useReactFlow();
+  const router = useRouter();
+  const reactFlow = useReactFlow<FlowNode>();
   const workspaceRef = useRef<HTMLDivElement>(null);
   const reactFlowWrapperRef = useRef<HTMLDivElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
@@ -4120,11 +4146,26 @@ function ArchifyGraphCanvas({
   const [, setRawGraph] = useState<VisualGraph | null>(null);
   const [classification, setClassification] = useState<RepositoryClassification | null>(null);
   const [diagramDto, setDiagramDto] = useState<DiagramDto | null>(null);
-  const [activeDiagramType, setActiveDiagramType] = useState<string>("default");
+  const [activeDiagramType, setActiveDiagramType] = useState<string>(() => {
+    if (kind === "dependencies") return "dependencies";
+    if (kind === "workflow") return "workflow";
+    return "default";
+  });
   const [availableDiagramTypes, setAvailableDiagramTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Sync active diagram type when route kind changes
+  useEffect(() => {
+    if (kind === "dependencies") {
+      setActiveDiagramType("dependencies");
+    } else if (kind === "workflow") {
+      setActiveDiagramType("workflow");
+    } else if (kind === "architecture") {
+      setActiveDiagramType("default");
+    }
+  }, [kind]);
 
   // Diagram View Lock: default false so users can freely pan, drag nodes and organize layout
   const [isViewLocked, setIsViewLocked] = useState(false);
@@ -4154,9 +4195,39 @@ function ArchifyGraphCanvas({
     [isViewLocked, onNodesChange],
   );
 
-  // Load Graph Data depending on Active Tab & activeDiagramType
+  // Handler to return to the primary repository architecture diagram
+  const handleBackToMainDiagram = useCallback(() => {
+    const mainType =
+      availableDiagramTypes.find(
+        (t) => !["workflow", "cicd", "release"].includes(t.toLowerCase()),
+      ) ||
+      (availableDiagramTypes.length > 0 && availableDiagramTypes[0].toLowerCase() !== "workflow"
+        ? availableDiagramTypes[0]
+        : "default");
+
+    setDiagramDto(null);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    setTraceDirection("none");
+    setIsRouteProbing(false);
+    setHudTab("MAP");
+
+    setActiveTab("05-repo");
+    setActiveDiagramType(mainType);
+
+    if (analysisId) {
+      const isWorkflowRoute =
+        kind === "workflow" ||
+        (typeof window !== "undefined" && window.location.pathname.includes("/workflow"));
+      if (isWorkflowRoute) {
+        router.push(`/projects/${encodeURIComponent(analysisId)}/architecture`);
+      }
+    }
+  }, [availableDiagramTypes, analysisId, kind, router]);
+
+  // Load Graph Data: Always 100% REAL from analyzed repository when analysisId is present
   useEffect(() => {
-    if (activeTab === "05-repo" && analysisId) {
+    if (analysisId) {
       setLoading(true);
       setError(null);
 
@@ -4166,10 +4237,11 @@ function ArchifyGraphCanvas({
         .then((cls) => setClassification(cls))
         .catch(() => {});
 
-      // Fetch typed diagram from backend
-      const targetDiagramType = kind === "dependencies"
-        ? "dependencies"
-        : (activeDiagramType === "default" ? undefined : activeDiagramType);
+      // Determine typed diagram to fetch from backend
+      const targetDiagramType =
+        activeDiagramType === "default"
+          ? (kind === "dependencies" ? "dependencies" : (kind === "workflow" ? "workflow" : undefined))
+          : activeDiagramType;
 
       analysisGateway
         .diagram(analysisId, targetDiagramType)
@@ -4178,16 +4250,28 @@ function ArchifyGraphCanvas({
           if (diagram.availableDiagramTypes && diagram.availableDiagramTypes.length > 0) {
             setAvailableDiagramTypes(diagram.availableDiagramTypes);
           }
-          const { nodes: builtNodes, edges: builtEdges } = buildFromDiagramDto(diagram, theme);
-          setNodes(builtNodes);
-          setEdges(builtEdges);
+          if (diagram.status === "Success" && diagram.nodes && diagram.nodes.length > 0) {
+            if (diagram.diagramType === "workflow" || targetDiagramType === "workflow") {
+              const { nodes: builtNodes, edges: builtEdges } = buildWorkflowFromDiagramDto(diagram, theme);
+              setNodes(builtNodes);
+              setEdges(builtEdges);
+            } else {
+              const { nodes: builtNodes, edges: builtEdges } = buildFromDiagramDto(diagram, theme);
+              setNodes(builtNodes);
+              setEdges(builtEdges);
+            }
+          } else {
+            setNodes([]);
+            setEdges([]);
+          }
           setTimeout(() => {
             reactFlow.fitView({ padding: 0.2, duration: 400 });
           }, 60);
         })
         .catch(() => {
           // Fallback to legacy architecture endpoint
-          analysisGateway[kind === "dependencies" ? "dependencies" : "architecture"](analysisId)
+          const fallbackType = targetDiagramType === "dependencies" ? "dependencies" : "architecture";
+          analysisGateway[fallbackType](analysisId)
             .then((graph) => {
               setRawGraph(graph);
               const { nodes: builtNodes, edges: builtEdges } = buildLiveRepoArchifyGraph(graph.nodes, graph.edges, theme);
@@ -4199,6 +4283,8 @@ function ArchifyGraphCanvas({
             })
             .catch((err: unknown) => {
               setError(err instanceof Error ? err.message : "Unable to load repository diagram.");
+              setNodes([]);
+              setEdges([]);
             });
         })
         .finally(() => {
@@ -4213,43 +4299,13 @@ function ArchifyGraphCanvas({
         reactFlow.fitView({ padding: 0.16, duration: 400 });
       }, 60);
     } else if (activeTab === "02-workflow") {
-      if (analysisId) {
-        setLoading(true);
-        setError(null);
-
-        analysisGateway
-          .diagram(analysisId, "workflow")
-          .then((diagram) => {
-            setDiagramDto(diagram);
-            if (diagram.status === "Success" && diagram.nodes && diagram.nodes.length > 0) {
-              const { nodes: builtNodes, edges: builtEdges } = buildWorkflowFromDiagramDto(diagram, theme);
-              setNodes(builtNodes);
-              setEdges(builtEdges);
-            } else {
-              setNodes([]);
-              setEdges([]);
-            }
-            setTimeout(() => {
-              reactFlow.fitView({ padding: 0.14, duration: 400 });
-            }, 60);
-          })
-          .catch((err: unknown) => {
-            setError(err instanceof Error ? err.message : "Unable to load workflow diagram.");
-            setNodes([]);
-            setEdges([]);
-          })
-          .finally(() => {
-            setLoading(false);
-          });
-      } else {
-        const { nodes: builtNodes, edges: builtEdges } = buildReleaseDeliveryWorkflow(theme);
-        setNodes(builtNodes);
-        setEdges(builtEdges);
-        setRawGraph(null);
-        setTimeout(() => {
-          reactFlow.fitView({ padding: 0.14, duration: 400 });
-        }, 60);
-      }
+      const { nodes: builtNodes, edges: builtEdges } = buildReleaseDeliveryWorkflow(theme);
+      setNodes(builtNodes);
+      setEdges(builtEdges);
+      setRawGraph(null);
+      setTimeout(() => {
+        reactFlow.fitView({ padding: 0.14, duration: 400 });
+      }, 60);
     } else {
       const { nodes: builtNodes, edges: builtEdges } = buildAgentToolCallWorkflow(theme);
       setNodes(builtNodes);
@@ -4259,7 +4315,7 @@ function ArchifyGraphCanvas({
         reactFlow.fitView({ padding: 0.18, duration: 400 });
       }, 60);
     }
-  }, [activeTab, analysisId, kind, theme, activeDiagramType, reactFlow, setNodes, setEdges]);
+  }, [analysisId, kind, activeDiagramType, activeTab, theme, reactFlow, setNodes, setEdges]);
 
 
   // Route Probing Calculation (BFS Shortest Path A -> B)
@@ -4944,38 +5000,94 @@ function ArchifyGraphCanvas({
   }, [isExportOpen]);
 
   const isDependenciesView = kind === "dependencies";
+  const isVi = language === "vi";
 
-  // Tab definitions: strictly show only repository architecture/dependencies when viewing an analyzed repo
-  const tabs: { key: WorkflowPresetKey; label: string; file: string }[] = [];
-  if (analysisId) {
-    tabs.push({
-      key: "05-repo",
-      label: isDependenciesView
-        ? (language === "vi" ? "Sơ đồ Phụ thuộc" : "Dependencies Graph")
-        : (language === "vi" ? "Kiến trúc Hệ thống" : "Live Architecture"),
-      file: isDependenciesView
-        ? `repo-${analysisId}.dependencies.html`
-        : `repo-${analysisId}.architecture.html`,
-    });
-    tabs.push({
-      key: "repolens-arch",
-      label: language === "vi" ? "01 Kiến trúc Chuẩn (Clean Arch)" : "01 Clean Architecture SRS",
-      file: "repolens-clean-architecture.html",
-    });
-    tabs.push({
-      key: "02-workflow",
-      label: language === "vi" ? "02 Quy trình Phát hành (Workflow)" : "02 Release Delivery Workflow",
-      file: "release-delivery-workflow.html",
-    });
-  } else {
-    tabs.push(
-      { key: "repolens-arch", label: "01 Clean Architecture SRS", file: "repolens-clean-architecture.html" },
-      { key: "02-workflow", label: "02 Release Delivery Workflow", file: "release-delivery-workflow.html" },
-      { key: "01-agent", label: "03 Agent Tool Call", file: "agent-tool-call.workflow.html" },
-    );
-  }
+  // Build 100% Real Repository Tabs for analyzed project
+  const liveTabs = useMemo(() => {
+    if (!analysisId) return [];
 
-  const currentTabInfo = tabs.find((t) => t.key === activeTab) || tabs[0];
+    const tabsList: { type: string; label: string; file: string }[] = [];
+    const formatLabel = (idx: number, name: string) => {
+      const numStr = idx < 10 ? `0${idx}` : `${idx}`;
+      return `${numStr} ${name}`;
+    };
+
+    let order = 1;
+    // 1. Available types from backend or defaults from classification
+    const baseTypes =
+      availableDiagramTypes.length > 0
+        ? availableDiagramTypes
+        : classification?.type === "Frontend"
+        ? ["route_map", "component_tree", "external_api"]
+        : classification?.type === "ApiBackend"
+        ? ["architecture", "endpoints", "erd"]
+        : ["architecture"];
+
+    for (const dtype of baseTypes) {
+      if (!tabsList.some((t) => t.type === dtype)) {
+        let title = "";
+        switch (dtype.toLowerCase()) {
+          case "architecture":
+            title = isVi ? "Kiến trúc Hệ thống" : "System Architecture";
+            break;
+          case "endpoints":
+            title = isVi ? "Danh sách API (Endpoints)" : "API Endpoints";
+            break;
+          case "erd":
+            title = isVi ? "Cơ sở Dữ liệu (ERD)" : "Database (ERD)";
+            break;
+          case "route_map":
+            title = isVi ? "Bản đồ Tuyến đường (Route Map)" : "Route Map";
+            break;
+          case "component_tree":
+            title = isVi ? "Cây Thành phần (Components)" : "Component Tree";
+            break;
+          case "external_api":
+            title = isVi ? "Tích hợp API Ngoài" : "External APIs";
+            break;
+          default:
+            title = dtype.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+            break;
+        }
+        tabsList.push({
+          type: dtype,
+          label: formatLabel(order++, title),
+          file: `repo-${analysisId}.${dtype}.html`,
+        });
+      }
+    }
+
+    // 2. Dependencies tab
+    if (!tabsList.some((t) => t.type === "dependencies")) {
+      tabsList.push({
+        type: "dependencies",
+        label: formatLabel(order++, isVi ? "Sơ đồ Phụ thuộc" : "Dependencies Graph"),
+        file: `repo-${analysisId}.dependencies.html`,
+      });
+    }
+
+    // 3. Workflow CI/CD tab
+    if (!tabsList.some((t) => t.type === "workflow")) {
+      tabsList.push({
+        type: "workflow",
+        label: formatLabel(order++, isVi ? "Quy trình CI/CD" : "CI/CD Workflow"),
+        file: `repo-${analysisId}.workflow.html`,
+      });
+    }
+
+    return tabsList;
+  }, [analysisId, availableDiagramTypes, classification, isVi]);
+
+  // Demo tabs ONLY when analysisId is absent (standalone demo)
+  const demoTabs: { key: WorkflowPresetKey; label: string; file: string }[] = [
+    { key: "repolens-arch", label: "01 Clean Architecture SRS", file: "repolens-clean-architecture.html" },
+    { key: "02-workflow", label: "02 Release Delivery Workflow", file: "release-delivery-workflow.html" },
+    { key: "01-agent", label: "03 Agent Tool Call", file: "agent-tool-call.workflow.html" },
+  ];
+
+  const currentTabInfo = analysisId
+    ? (liveTabs.find((t) => t.type === activeDiagramType) || liveTabs[0])
+    : (demoTabs.find((t) => t.key === activeTab) || demoTabs[0]);
 
   return (
     <div
@@ -5025,138 +5137,131 @@ function ArchifyGraphCanvas({
                 <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#27c93f", display: "inline-block" }} />
               </div>
 
-              {/* Tabs */}
-              <div style={{ display: "flex", gap: "4px", marginLeft: "6px", flexWrap: "wrap" }}>
-                {tabs.map((tab) => {
-                  const isActive = activeTab === tab.key;
-                  return (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      onClick={() => {
-                        setActiveTab(tab.key);
-                        setSelectedNodeId(null);
-                        setSelectedEdgeId(null);
-                        setTraceDirection("none");
-                        setIsRouteProbing(false);
-                        setHudTab("MAP");
-                      }}
-                      style={{
-                        padding: "5px 12px",
-                        fontSize: "11px",
-                        fontWeight: isActive ? 750 : 600,
-                        borderRadius: "7px",
-                        border: isActive
-                          ? `1px solid ${isDark ? "rgba(0, 245, 212, 0.5)" : "rgba(11, 143, 104, 0.45)"}`
-                          : "1px solid transparent",
-                        cursor: "pointer",
-                        background: isActive
-                          ? isDark
-                            ? "rgba(0, 245, 212, 0.14)"
-                            : "#e6f7f0"
-                          : "transparent",
-                        color: isActive
-                          ? isDark
-                            ? "#00f5d4"
-                            : "#065e44"
-                          : isDark
-                            ? "#94a3b8"
-                            : "#64748b",
-                        transition: "all 0.18s ease",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      {tab.key === "05-repo" && (
-                        isDependenciesView ? (
-                          <PackageIcon size={13} color="currentColor" />
-                        ) : (
-                          <ArchitectureIcon size={13} color="currentColor" />
-                        )
-                      )}
-                      {tab.label}
-                    </button>
-                  );
-                })}
+              {/* Tabs: 100% Real from Repository Analysis */}
+              <div style={{ display: "flex", gap: "4px", marginLeft: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                {analysisId ? (
+                  liveTabs.map((tab) => {
+                    const isActive =
+                      activeDiagramType === tab.type ||
+                      (activeDiagramType === "default" && tab.type === liveTabs[0]?.type);
+                    return (
+                      <button
+                        key={tab.type}
+                        type="button"
+                        onClick={() => {
+                          setActiveDiagramType(tab.type);
+                          setActiveTab("05-repo");
+                          setDiagramDto(null);
+                          setSelectedNodeId(null);
+                          setSelectedEdgeId(null);
+                          setTraceDirection("none");
+                          setIsRouteProbing(false);
+                          setHudTab("MAP");
+                        }}
+                        style={{
+                          padding: "5px 12px",
+                          fontSize: "11px",
+                          fontWeight: isActive ? 750 : 600,
+                          borderRadius: "7px",
+                          border: isActive
+                            ? `1px solid ${isDark ? "rgba(0, 245, 212, 0.5)" : "rgba(11, 143, 104, 0.45)"}`
+                            : "1px solid transparent",
+                          cursor: "pointer",
+                          background: isActive
+                            ? isDark
+                              ? "rgba(0, 245, 212, 0.14)"
+                              : "#e6f7f0"
+                            : "transparent",
+                          color: isActive
+                            ? isDark
+                              ? "#00f5d4"
+                              : "#065e44"
+                            : isDark
+                              ? "#94a3b8"
+                              : "#64748b",
+                          transition: "all 0.18s ease",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        {getDiagramTabIcon(tab.type)}
+                        <span>{tab.label}</span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  demoTabs.map((tab) => {
+                    const isActive = activeTab === tab.key;
+                    return (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => {
+                          setActiveTab(tab.key);
+                          setDiagramDto(null);
+                          setSelectedNodeId(null);
+                          setSelectedEdgeId(null);
+                          setTraceDirection("none");
+                          setIsRouteProbing(false);
+                          setHudTab("MAP");
+                        }}
+                        style={{
+                          padding: "5px 12px",
+                          fontSize: "11px",
+                          fontWeight: isActive ? 750 : 600,
+                          borderRadius: "7px",
+                          border: isActive
+                            ? `1px solid ${isDark ? "rgba(0, 245, 212, 0.5)" : "rgba(11, 143, 104, 0.45)"}`
+                            : "1px solid transparent",
+                          cursor: "pointer",
+                          background: isActive
+                            ? isDark
+                              ? "rgba(0, 245, 212, 0.14)"
+                              : "#e6f7f0"
+                            : "transparent",
+                          color: isActive
+                            ? isDark
+                              ? "#00f5d4"
+                              : "#065e44"
+                            : isDark
+                              ? "#94a3b8"
+                              : "#64748b",
+                          transition: "all 0.18s ease",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })
+                )}
               </div>
 
-              {/* Classification badge and diagram type buttons for live repo */}
-              {activeTab === "05-repo" && (
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginLeft: "8px" }}>
-                  {classification && (
-                    <div
-                      title={classification.summary}
-                      style={{
-                        padding: "4px 9px",
-                        borderRadius: "7px",
-                        background: isDark ? "rgba(16, 185, 129, 0.15)" : "#d1fae5",
-                        border: `1px solid ${isDark ? "rgba(16, 185, 129, 0.4)" : "#10b981"}`,
-                        color: isDark ? "#34d399" : "#065f46",
-                        fontSize: "10.5px",
-                        fontWeight: 700,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      <PackageIcon size={13} color="currentColor" />
-                      <span>{classification.type}</span>
-                      <span style={{ fontSize: "9.5px", opacity: 0.85 }}>({classification.confidence})</span>
-                    </div>
-                  )}
-
-                  {!isDependenciesView && availableDiagramTypes.length > 1 && (
-                    <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                      {availableDiagramTypes.map((dtype) => {
-                        const isCurActive =
-                          activeDiagramType === dtype ||
-                          (activeDiagramType === "default" && dtype === availableDiagramTypes[0]);
-                        return (
-                          <button
-                            key={dtype}
-                            type="button"
-                            onClick={() => {
-                              setActiveDiagramType(dtype);
-                              setSelectedNodeId(null);
-                              setSelectedEdgeId(null);
-                            }}
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: "6px",
-                              fontSize: "10.5px",
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              border: `1px solid ${
-                                isCurActive
-                                  ? isDark
-                                    ? "rgba(0, 245, 212, 0.5)"
-                                    : "rgba(11, 143, 104, 0.45)"
-                                  : isDark
-                                  ? "#334155"
-                                  : "#cbd5e1"
-                              }`,
-                              background: isCurActive
-                                ? isDark
-                                  ? "rgba(0, 245, 212, 0.14)"
-                                  : "#e6f7f0"
-                                : "transparent",
-                              color: isCurActive
-                                ? isDark
-                                  ? "#00f5d4"
-                                  : "#065e44"
-                                : isDark
-                                ? "#94a3b8"
-                                : "#64748b",
-                              textTransform: "capitalize",
-                            }}
-                          >
-                            {dtype.replace(/_/g, " ")}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+              {/* Classification badge for live repo */}
+              {analysisId && classification && (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "8px" }}>
+                  <div
+                    title={classification.summary}
+                    style={{
+                      padding: "4px 9px",
+                      borderRadius: "7px",
+                      background: isDark ? "rgba(16, 185, 129, 0.15)" : "#d1fae5",
+                      border: `1px solid ${isDark ? "rgba(16, 185, 129, 0.4)" : "#10b981"}`,
+                      color: isDark ? "#34d399" : "#065f46",
+                      fontSize: "10.5px",
+                      fontWeight: 700,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <PackageIcon size={13} color="currentColor" />
+                    <span>{classification.type}</span>
+                    <span style={{ fontSize: "9.5px", opacity: 0.85 }}>({classification.confidence})</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -5923,7 +6028,9 @@ function ArchifyGraphCanvas({
             </ReactFlow>
 
             {/* Alert banner when status is NotDetected (e.g. Không phát hiện database) or Unsupported */}
-            {diagramDto && (diagramDto.status === "NotDetected" || diagramDto.status === "Unsupported") && (
+            {diagramDto &&
+              (activeTab === "05-repo" || activeTab === "02-workflow") &&
+              (diagramDto.status === "NotDetected" || diagramDto.status === "Unsupported") && (
               <div
                 style={{
                   position: "absolute",
@@ -6047,12 +6154,10 @@ function ArchifyGraphCanvas({
                   </p>
 
                   {/* Back to main diagram button */}
-                  {availableDiagramTypes.length > 0 && (
+                  {(availableDiagramTypes.length > 0 || analysisId) && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setActiveDiagramType(availableDiagramTypes[0]);
-                      }}
+                      onClick={handleBackToMainDiagram}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -6075,7 +6180,24 @@ function ArchifyGraphCanvas({
                     >
                       <ArrowLeftIcon size={12} color="currentColor" />
                       <span>{t("diagram.backToMain")}</span>
-                      <span style={{ opacity: 0.9, textTransform: "capitalize" }}>({availableDiagramTypes[0]})</span>
+                      {(() => {
+                        const targetLabel =
+                          availableDiagramTypes.find(
+                            (t) => !["workflow", "cicd", "release"].includes(t.toLowerCase()),
+                          ) ||
+                          (availableDiagramTypes.length > 0 &&
+                          availableDiagramTypes[0].toLowerCase() !== "workflow"
+                            ? availableDiagramTypes[0]
+                            : null);
+                        if (targetLabel) {
+                          return (
+                            <span style={{ opacity: 0.9, textTransform: "capitalize" }}>
+                              ({targetLabel.replace(/_/g, " ")})
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                     </button>
                   )}
                 </div>

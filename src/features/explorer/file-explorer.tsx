@@ -91,7 +91,36 @@ export function FileExplorer({ analysisId }: { analysisId: string }) {
       {error && <div className="explorer-error" role="alert">{error}</div>}
       <div className="file-layout">
         <div className="explorer-list file-list">
-          {loading ? <ExplorerLoading label="Loading files" /> : result.items.length === 0 ? <ExplorerEmpty label="No files match the selected filters." /> : result.items.map((file) => <button type="button" className="file-row" key={file.id} onClick={() => inspectFile(file.id)}><span className="file-icon">{file.path.split(".").at(-1)?.slice(0, 3).toUpperCase()}</span><span><strong>{file.path.split("/").at(-1)}</strong><small>{file.path}</small></span><span className="file-meta">{file.language}<small>{formatBytes(file.size)}</small></span></button>)}
+          {loading ? (
+            <ExplorerLoading label="Loading files" />
+          ) : result.items.length === 0 ? (
+            <ExplorerEmpty label="No files match the selected filters." />
+          ) : (
+            result.items.map((file) => (
+              <button
+                type="button"
+                className={`file-row ${detail?.id === file.id ? "active" : ""}`}
+                key={file.id}
+                onClick={() => inspectFile(file.id)}
+              >
+                <span className="file-icon" title={file.language}>
+                  {file.path.split(".").at(-1)?.slice(0, 4).toUpperCase() || "FILE"}
+                </span>
+                <div className="file-info">
+                  <strong className="file-name" title={file.path.split("/").at(-1)}>
+                    {file.path.split("/").at(-1)}
+                  </strong>
+                  <small className="file-path" title={file.path}>
+                    {file.path}
+                  </small>
+                </div>
+                <div className="file-meta">
+                  <span className="file-lang-badge">{file.language}</span>
+                  <small>{formatBytes(file.size)}</small>
+                </div>
+              </button>
+            ))
+          )}
           {!loading && result.totalPages > 1 && <Pagination page={result.page} totalPages={result.totalPages} onChange={changePage} />}
         </div>
 
